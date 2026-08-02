@@ -1,4 +1,5 @@
 import re
+import sys
 import unittest
 import tempfile
 from pathlib import Path
@@ -2256,7 +2257,7 @@ func main(): Void {
                 "_ForgeAsyncTask* _forge_async_task_new(_forge_async_job_fn run, void* context);",
                 result.runtime_header.read_text(),
             )
-            self.assertEqual(result.link_flags, ("-pthread",))
+            self.assertEqual(result.link_flags, () if sys.platform == "win32" else ("-pthread",))
             self.assertIn(
                 "char* _forge_string_concat(size_t count, ...)",
                 result.runtime_source.read_text(),
@@ -2271,6 +2272,18 @@ func main(): Void {
             )
             self.assertIn(
                 "static void* _forge_async_worker_run(void* unused)",
+                result.runtime_source.read_text(),
+            )
+            self.assertIn(
+                "#ifdef _WIN32",
+                result.runtime_source.read_text(),
+            )
+            self.assertIn(
+                "CreateThread(NULL, 0, _forge_async_worker_run, NULL, 0, NULL)",
+                result.runtime_source.read_text(),
+            )
+            self.assertIn(
+                "SleepConditionVariableCS(&_forge_async_work_cond",
                 result.runtime_source.read_text(),
             )
             self.assertIn(

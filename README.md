@@ -112,11 +112,21 @@ bin/forge run app.forge
 bin/forge run path/to/project
 ```
 
+On Windows, use the bundled batch launcher:
+
+```bat
+bin\forge.bat translate app.forge -o app.c
+bin\forge.bat compile app.forge -o app.exe --c-out build\c
+bin\forge.bat run app.forge
+```
+
 `translate` emits C for one Forge file. `compile` and `run` accept either a Forge
 entry file, a project directory, or `forge.toml`. They emit one `.c` file per
 project/package `.forge` file plus shared headers and pass native include/link
 metadata from package manifests to the C compiler. `compile` builds with
 optimizations. `run` builds without optimizations and runs the produced binary.
+The CLI implementation is shared Python code behind the macOS/Linux `bin/forge`
+wrapper and the Windows `bin\forge.bat` wrapper.
 
 ## Bundled standard library
 

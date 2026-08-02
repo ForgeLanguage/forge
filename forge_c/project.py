@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 import os
 from pathlib import Path
 import shutil
+import sys
 
 from forge_analysis import AnalysisResult, AnnotationTable, Symbol, validate
 from forge_lowering import lower
@@ -160,7 +161,7 @@ def emit_c_project(entry_path: str | Path, output_dir: str | Path) -> CProjectOu
         project.native.libraries,
         project.native.frameworks,
         project.native.pkg_config,
-        ("-pthread",),
+        _runtime_link_flags(),
     )
 
 
@@ -324,12 +325,17 @@ def _runtime_header() -> str:
 def _runtime_source() -> str:
     return """#include "forge_runtime.h"
 
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
 #include <unistd.h>
+#endif
 
 struct _ForgeAsyncTask {
     _forge_async_job_fn run;
@@ -339,12 +345,26 @@ struct _ForgeAsyncTask {
     struct _ForgeAsyncTask* next;
 };
 
+#ifdef _WIN32
+
+static CRITICAL_SECTION _forge_async_mutex;
+static CONDITION_VARIABLE _forge_async_work_cond;
+static CONDITION_VARIABLE _forge_async_complete_cond;
+static INIT_ONCE _forge_async_init_once = INIT_ONCE_STATIC_INIT;
+static _ForgeAsyncTask* _forge_async_queue_head = NULL;
+static _ForgeAsyncTask* _forge_async_queue_tail = NULL;
+static bool _forge_async_workers_started = false;
+
+#else
+
 static pthread_mutex_t _forge_async_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t _forge_async_work_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t _forge_async_complete_cond = PTHREAD_COND_INITIALIZER;
 static _ForgeAsyncTask* _forge_async_queue_head = NULL;
 static _ForgeAsyncTask* _forge_async_queue_tail = NULL;
 static bool _forge_async_workers_started = false;
+
+#endif
 
 void* _forge_alloc(size_t size) {
     void* result = malloc(size == 0 ? 1 : size);
@@ -408,6 +428,32 @@ static void _forge_async_abort_on_error(int status) {
     }
 }
 
+#ifdef _WIN32
+
+static void _forge_async_abort_on_false(BOOL ok) {
+    if (!ok) {
+        abort();
+    }
+}
+
+static BOOL CALLBACK _forge_async_init(PINIT_ONCE init_once, PVOID parameter, PVOID* context) {
+    (void)init_once;
+    (void)parameter;
+    (void)context;
+    InitializeCriticalSection(&_forge_async_mutex);
+    InitializeConditionVariable(&_forge_async_work_cond);
+    InitializeConditionVariable(&_forge_async_complete_cond);
+    return TRUE;
+}
+
+static void _forge_async_ensure_initialized(void) {
+    _forge_async_abort_on_false(
+        InitOnceExecuteOnce(&_forge_async_init_once, _forge_async_init, NULL, NULL)
+    );
+}
+
+#endif
+
 static size_t _forge_async_worker_count(void) {
     const char* configured = getenv("FORGE_ASYNC_THREADS");
     if (configured != NULL && configured[0] != '\\0') {
@@ -418,10 +464,18 @@ static size_t _forge_async_worker_count(void) {
         }
     }
 
+#ifdef _WIN32
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    if (info.dwNumberOfProcessors > 0) {
+        return (size_t)info.dwNumberOfProcessors;
+    }
+#else
     long processors = sysconf(_SC_NPROCESSORS_ONLN);
     if (processors > 0) {
         return (size_t)processors;
     }
+#endif
     return 4;
 }
 
@@ -441,11 +495,39 @@ static _ForgeAsyncTask* _forge_async_pop_task(void) {
 static void _forge_async_run_task(_ForgeAsyncTask* task) {
     task->run(task->context);
 
+#ifdef _WIN32
+    _forge_async_ensure_initialized();
+    EnterCriticalSection(&_forge_async_mutex);
+    task->complete = true;
+    WakeAllConditionVariable(&_forge_async_complete_cond);
+    LeaveCriticalSection(&_forge_async_mutex);
+#else
     _forge_async_abort_on_error(pthread_mutex_lock(&_forge_async_mutex));
     task->complete = true;
     _forge_async_abort_on_error(pthread_cond_broadcast(&_forge_async_complete_cond));
     _forge_async_abort_on_error(pthread_mutex_unlock(&_forge_async_mutex));
+#endif
 }
+
+#ifdef _WIN32
+
+static DWORD WINAPI _forge_async_worker_run(LPVOID unused) {
+    (void)unused;
+    for (;;) {
+        _forge_async_ensure_initialized();
+        EnterCriticalSection(&_forge_async_mutex);
+        while (_forge_async_queue_head == NULL) {
+            SleepConditionVariableCS(&_forge_async_work_cond, &_forge_async_mutex, INFINITE);
+        }
+
+        _ForgeAsyncTask* task = _forge_async_pop_task();
+        LeaveCriticalSection(&_forge_async_mutex);
+        _forge_async_run_task(task);
+    }
+    return 0;
+}
+
+#else
 
 static void* _forge_async_worker_run(void* unused) {
     (void)unused;
@@ -464,6 +546,8 @@ static void* _forge_async_worker_run(void* unused) {
     return NULL;
 }
 
+#endif
+
 static void _forge_async_start_workers(void) {
     if (_forge_async_workers_started) {
         return;
@@ -471,9 +555,17 @@ static void _forge_async_start_workers(void) {
 
     size_t worker_count = _forge_async_worker_count();
     for (size_t i = 0; i < worker_count; i += 1) {
+#ifdef _WIN32
+        HANDLE worker = CreateThread(NULL, 0, _forge_async_worker_run, NULL, 0, NULL);
+        if (worker == NULL) {
+            abort();
+        }
+        CloseHandle(worker);
+#else
         pthread_t worker;
         _forge_async_abort_on_error(pthread_create(&worker, NULL, _forge_async_worker_run, NULL));
         _forge_async_abort_on_error(pthread_detach(worker));
+#endif
     }
     _forge_async_workers_started = true;
 }
@@ -495,7 +587,12 @@ void _forge_async_task_start(_ForgeAsyncTask* task) {
     if (task == NULL) {
         abort();
     }
+#ifdef _WIN32
+    _forge_async_ensure_initialized();
+    EnterCriticalSection(&_forge_async_mutex);
+#else
     _forge_async_abort_on_error(pthread_mutex_lock(&_forge_async_mutex));
+#endif
     if (task->started) {
         abort();
     }
@@ -508,31 +605,55 @@ void _forge_async_task_start(_ForgeAsyncTask* task) {
         _forge_async_queue_tail->next = task;
         _forge_async_queue_tail = task;
     }
+#ifdef _WIN32
+    WakeConditionVariable(&_forge_async_work_cond);
+    LeaveCriticalSection(&_forge_async_mutex);
+#else
     _forge_async_abort_on_error(pthread_cond_signal(&_forge_async_work_cond));
     _forge_async_abort_on_error(pthread_mutex_unlock(&_forge_async_mutex));
+#endif
 }
 
 void _forge_async_task_await(_ForgeAsyncTask* task) {
     if (task == NULL) {
         abort();
     }
+#ifdef _WIN32
+    _forge_async_ensure_initialized();
+    EnterCriticalSection(&_forge_async_mutex);
+#else
     _forge_async_abort_on_error(pthread_mutex_lock(&_forge_async_mutex));
+#endif
     if (!task->started) {
         abort();
     }
     while (!task->complete) {
         _ForgeAsyncTask* next = _forge_async_pop_task();
         if (next != NULL) {
+#ifdef _WIN32
+            LeaveCriticalSection(&_forge_async_mutex);
+            _forge_async_run_task(next);
+            EnterCriticalSection(&_forge_async_mutex);
+#else
             _forge_async_abort_on_error(pthread_mutex_unlock(&_forge_async_mutex));
             _forge_async_run_task(next);
             _forge_async_abort_on_error(pthread_mutex_lock(&_forge_async_mutex));
+#endif
         } else {
+#ifdef _WIN32
+            SleepConditionVariableCS(&_forge_async_complete_cond, &_forge_async_mutex, INFINITE);
+#else
             _forge_async_abort_on_error(
                 pthread_cond_wait(&_forge_async_complete_cond, &_forge_async_mutex)
             );
+#endif
         }
     }
+#ifdef _WIN32
+    LeaveCriticalSection(&_forge_async_mutex);
+#else
     _forge_async_abort_on_error(pthread_mutex_unlock(&_forge_async_mutex));
+#endif
 }
 
 void _forge_async_task_free(_ForgeAsyncTask* task) {
@@ -545,6 +666,10 @@ void _forge_async_task_free(_ForgeAsyncTask* task) {
     free(task);
 }
 """
+
+
+def _runtime_link_flags() -> tuple[str, ...]:
+    return () if sys.platform == "win32" else ("-pthread",)
 
 
 def _merge_project_annotations(

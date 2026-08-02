@@ -4,16 +4,19 @@
 #include "std/Net/TcpListener.h"
 #include "std/Net/TcpStream.h"
 
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 static ForgeResult_TcpStream_NetworkIssue forge_net_stream_issue(const char* message) {
     struct std_Net_NetworkIssue* issue = std_Net_NetworkIssue_new();
@@ -50,6 +53,50 @@ static ForgeResult_Int_NetworkIssue forge_net_int_issue(const char* message) {
         .outcome_NetworkIssue = issue,
     };
 }
+
+#ifdef _WIN32
+
+ForgeResult_TcpListener_NetworkIssue forge_net_listen_tcp(int port) {
+    (void)port;
+    return forge_net_listener_issue("std.Net is not implemented on Windows");
+}
+
+ForgeResult_TcpStream_NetworkIssue forge_net_accept_tcp(struct std_Net_TcpListener* listener) {
+    (void)listener;
+    return forge_net_stream_issue("std.Net is not implemented on Windows");
+}
+
+ForgeResult_TcpStream_NetworkIssue forge_net_connect_tcp(const char* host, int port) {
+    (void)host;
+    (void)port;
+    return forge_net_stream_issue("std.Net is not implemented on Windows");
+}
+
+ForgeResult_Byte___NetworkIssue forge_net_read(struct std_Net_TcpStream* stream, int max_bytes) {
+    (void)stream;
+    (void)max_bytes;
+    return forge_net_bytes_issue("std.Net is not implemented on Windows");
+}
+
+ForgeResult_Int_NetworkIssue forge_net_write(struct std_Net_TcpStream* stream, ForgeArray_Byte bytes) {
+    (void)stream;
+    (void)bytes;
+    return forge_net_int_issue("std.Net is not implemented on Windows");
+}
+
+void forge_net_close_listener(struct std_Net_TcpListener* listener) {
+    if (listener != NULL) {
+        listener->handle = -1;
+    }
+}
+
+void forge_net_close(struct std_Net_TcpStream* stream) {
+    if (stream != NULL) {
+        stream->handle = -1;
+    }
+}
+
+#else
 
 ForgeResult_TcpListener_NetworkIssue forge_net_listen_tcp(int port) {
     if (port < 0 || port > 65535) {
@@ -224,3 +271,5 @@ void forge_net_close(struct std_Net_TcpStream* stream) {
     close(stream->handle);
     stream->handle = -1;
 }
+
+#endif

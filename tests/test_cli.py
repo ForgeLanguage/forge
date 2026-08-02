@@ -6,7 +6,10 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from pathlib import Path
+
+import forge_cli
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +46,13 @@ class ForgeCliTests(unittest.TestCase):
                 process.stdout.close()
             if process.stderr is not None:
                 process.stderr.close()
+
+    def test_windows_launcher_and_defaults_are_available(self) -> None:
+        self.assertTrue((PROJECT_ROOT / "bin" / "forge.bat").exists())
+        with patch.object(forge_cli.sys, "platform", "win32"):
+            self.assertEqual(forge_cli.default_binary_output(Path("app.forge")), Path(".forge-build/app.exe"))
+            self.assertNotIn("-D_POSIX_C_SOURCE=200112L", forge_cli.posix_mode_flags("release"))
+            self.assertNotIn("-D_DARWIN_C_SOURCE", forge_cli.posix_mode_flags("release"))
 
     def test_translate_writes_c_to_stdout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
