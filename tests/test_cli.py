@@ -65,6 +65,26 @@ class ForgeCliTests(unittest.TestCase):
             "forge: executable not found: missing.exe\n",
         )
 
+    def test_compile_reports_missing_project_entry_point_before_linking(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "library.forge"
+            output = root / "app"
+            c_output = root / "c"
+            source.write_text("func helper(): Int => 1")
+
+            result = subprocess.run(
+                [str(FORGE), "compile", str(source), "-o", str(output), "--c-out", str(c_output)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("project does not define an executable entry point", result.stderr)
+        self.assertNotIn("WinMain", result.stderr)
+
     def test_translate_writes_c_to_stdout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "sample.forge"

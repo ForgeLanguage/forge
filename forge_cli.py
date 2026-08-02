@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -185,6 +186,7 @@ def compile_project(source_path: Path, binary: Path, c_output: Path, mode: str) 
     c_files = list(result.sources)
     if not c_files:
         raise ForgeCliError("no C files to compile")
+    ensure_c_main(c_files)
 
     compiler_flags = [f"-I{path}" for path in result.include_dirs]
     link_flags = [
@@ -199,6 +201,20 @@ def compile_project(source_path: Path, binary: Path, c_output: Path, mode: str) 
         link_flags = msvc_link_flags(link_flags)
     write_compile_commands(mode, c_output, cc, compiler_flags, c_files)
     compile_c(binary, mode, cc, compiler_flags, c_files, link_flags)
+
+
+def ensure_c_main(c_files: list[Path]) -> None:
+    for c_file in c_files:
+        try:
+            source = c_file.read_text()
+        except OSError:
+            continue
+        if re.search(r"\bint\s+main\s*\(", source) is not None:
+            return
+    raise ForgeCliError(
+        "project does not define an executable entry point. Add top-level "
+        "`func main(): Void` or `func main(): Int` to the project entry file."
+    )
 
 
 def compile_c(

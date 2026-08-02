@@ -422,12 +422,6 @@ char* _forge_string_concat(size_t count, ...) {
     return result;
 }
 
-static void _forge_async_abort_on_error(int status) {
-    if (status != 0) {
-        abort();
-    }
-}
-
 #ifdef _WIN32
 
 static void _forge_async_abort_on_false(BOOL ok) {
@@ -450,6 +444,16 @@ static void _forge_async_ensure_initialized(void) {
     _forge_async_abort_on_false(
         InitOnceExecuteOnce(&_forge_async_init_once, _forge_async_init, NULL, NULL)
     );
+}
+
+#endif
+
+#ifndef _WIN32
+
+static void _forge_async_abort_on_error(int status) {
+    if (status != 0) {
+        abort();
+    }
 }
 
 #endif
