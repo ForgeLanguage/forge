@@ -49,10 +49,21 @@ class ForgeCliTests(unittest.TestCase):
 
     def test_windows_launcher_and_defaults_are_available(self) -> None:
         self.assertTrue((PROJECT_ROOT / "bin" / "forge.bat").exists())
-        with patch.object(forge_cli.sys, "platform", "win32"):
+        with patch.object(forge_cli.sys, "platform", "win32"), patch.object(forge_cli.shutil, "which", return_value=None):
             self.assertEqual(forge_cli.default_binary_output(Path("app.forge")), Path(".forge-build/app.exe"))
             self.assertNotIn("-D_POSIX_C_SOURCE=200112L", forge_cli.posix_mode_flags("release"))
             self.assertNotIn("-D_DARWIN_C_SOURCE", forge_cli.posix_mode_flags("release"))
+            with self.assertRaises(forge_cli.ForgeCliError):
+                forge_cli.compiler()
+
+    def test_main_reports_missing_executable_without_traceback(self) -> None:
+        with patch.object(forge_cli, "command_run", side_effect=FileNotFoundError(2, "No such file", "missing.exe")):
+            with patch("sys.stderr") as stderr:
+                self.assertEqual(forge_cli.main(["run", "app.forge"]), 1)
+        self.assertEqual(
+            "".join(call.args[0] for call in stderr.write.call_args_list),
+            "forge: executable not found: missing.exe\n",
+        )
 
     def test_translate_writes_c_to_stdout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

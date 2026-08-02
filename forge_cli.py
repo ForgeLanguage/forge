@@ -43,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
     except ForgeCliError as exc:
         print(f"forge: {exc}", file=sys.stderr)
         return 1
+    except FileNotFoundError as exc:
+        missing = exc.filename or "compiler"
+        print(f"forge: executable not found: {missing}", file=sys.stderr)
+        return 1
     except subprocess.CalledProcessError as exc:
         return exc.returncode
 
@@ -60,7 +64,7 @@ Commands:
   run        Generate one C source per Forge project file, compile without optimizations, and run.
 
 Environment:
-  CC               C compiler, default: cl on Windows when available, otherwise cc
+  CC               C compiler, default: cl/clang-cl/gcc/clang/cc on Windows, otherwise cc
   FORGE_BUILD_DIR  Build output directory, default: .forge-build
 """
     )
@@ -269,13 +273,19 @@ def compiler() -> str:
     configured = os.environ.get("CC")
     if configured:
         return configured
-    if sys.platform == "win32" and shutil.which("cl") is not None:
-        return "cl"
+    if sys.platform == "win32":
+        for candidate in ("cl", "clang-cl", "gcc", "clang", "cc"):
+            if shutil.which(candidate) is not None:
+                return candidate
+        raise ForgeCliError(
+            "C compiler not found. Install Visual Studio Build Tools, LLVM, or MinGW, "
+            "or set CC to a compiler executable."
+        )
     return "cc"
 
 
 def is_msvc(cc: str) -> bool:
-    return Path(cc).name.lower() in {"cl", "cl.exe"}
+    return Path(cc).name.lower() in {"cl", "cl.exe", "clang-cl", "clang-cl.exe"}
 
 
 def posix_mode_flags(mode: str) -> list[str]:
