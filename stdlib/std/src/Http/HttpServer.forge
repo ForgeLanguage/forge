@@ -1,0 +1,104 @@
+use std.Http.HttpIssue
+use std.Http.HttpServerHandler
+use std.Http.HttpServerResponse
+use std.Net.Network
+use std.Net.NetworkIssue
+use std.Net.TcpStream
+
+class
+
+public static async func serve(port: Int, handler: HttpServerHandler): Void, !HttpIssue {
+    const listener = catch Network.listenTcp(port) {
+        issue: NetworkIssue => {
+            return HttpIssue.new(issue.message)
+        }
+    }
+
+    while true {
+        const stream = catch await Network.acceptTcp(listener) {
+            issue: NetworkIssue => {
+                Network.closeListener(listener)
+                return HttpIssue.new(issue.message)
+            }
+        }
+
+        const served = await HttpServer.serveConnection(move stream, handler)
+    }
+}
+
+private static async func serveConnection(
+    take stream: TcpStream,
+    handler: HttpServerHandler
+): Bool {
+    let raw = ""
+    let headerEnd: Int = -1
+    let bodyLength = 0
+
+    const request: String? = while true {
+        const chunk = catch await Network.read(stream, 4096) {
+            issue: NetworkIssue => {
+                Network.close(stream)
+                return false
+            }
+        }
+
+        if chunk.len == 0 {
+            break
+        }
+
+        raw = raw + String.fromBytes(chunk)
+
+        if headerEnd < 0 {
+            headerEnd = raw.indexOf("\r\n\r\n")
+            if headerEnd >= 0 {
+                const contentLengthMarker = "Content-Length: "
+                const contentLengthStart = raw.indexOf(contentLengthMarker)
+                if contentLengthStart >= 0 && contentLengthStart < headerEnd {
+                    const lengthStart = contentLengthStart + contentLengthMarker.length()
+                    const lengthTail = raw.substring(lengthStart, headerEnd)
+                    const lengthEnd = lengthTail.indexOf("\r\n")
+                    const lengthText = lengthEnd >= 0
+                        ? lengthTail.substring(0, lengthEnd)
+                        : lengthTail
+                    bodyLength = lengthText.parseInt()
+                }
+            }
+        }
+
+        if headerEnd >= 0 && raw.length() >= headerEnd + 4 + bodyLength {
+            break raw
+        }
+    }
+
+    if request != null {
+        const requestLineEnd = request.indexOf("\r\n")
+        const requestLine = request.substring(0, requestLineEnd)
+        const parts = requestLine.split(" ", 3)
+        const [method, path, protocol] = catch parts {
+            issue: PatternMismatch => {
+                Network.close(stream)
+                return false
+            }
+        }
+        const body = request.substring(headerEnd + 4, request.length())
+        const response: HttpServerResponse = handler.handle(path, body)
+        const responseBytes = response.body.toBytes()
+        const responseHead =
+            "HTTP/1.1 " + response.status + " \r\n" +
+            "Content-Type: application/json\r\n" +
+            "Content-Length: " + responseBytes.len + "\r\n" +
+            "Connection: close\r\n\r\n"
+        const written = catch await Network.write(
+            stream,
+            (responseHead + response.body).toBytes()
+        ) {
+            issue: NetworkIssue => {
+                Network.close(stream)
+                return false
+            }
+        }
+    }
+
+    Network.close(stream)
+    return true
+}

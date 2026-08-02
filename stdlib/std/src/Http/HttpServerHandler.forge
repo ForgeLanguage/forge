@@ -1,0 +1,5 @@
+use std.Http.HttpServerResponse
+
+interface
+
+public func handle(path: String, body: String): HttpServerResponse

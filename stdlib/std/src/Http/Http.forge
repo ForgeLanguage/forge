@@ -1,0 +1,76 @@
+use std.Http.HttpIssue
+use std.Http.HttpResponse
+use std.Net.Network
+use std.Net.NetworkIssue
+
+class
+
+public static async func status(url: String): Int, !HttpIssue {
+    const response = forward await Http.get(url)
+    return response.status
+}
+
+public static async func get(url: String): HttpResponse, !HttpIssue {
+    const schemeEnd = url.indexOf("http://")
+    if schemeEnd != 0 {
+        return HttpIssue.new("only http:// URLs are supported")
+    }
+
+    const afterScheme = url.substring(7, url.length())
+    const slash = afterScheme.indexOf("/")
+    const slashEnd = slash >= 0 ? slash : afterScheme.length()
+    const hostPort = afterScheme.substring(0, slashEnd)
+    const path = slash >= 0 ? afterScheme.substring(slash, afterScheme.length()) : "/"
+
+    const colon = hostPort.indexOf(":")
+    const hostEnd = colon >= 0 ? colon : hostPort.length()
+    const host = hostPort.substring(0, hostEnd)
+    let port = 80
+    if colon >= 0 {
+        port = hostPort.substring(colon + 1, hostPort.length()).parseInt()
+    }
+
+    const stream = catch await Network.connectTcp(host, port) {
+        issue: NetworkIssue => {
+            return HttpIssue.new(issue.message)
+        }
+    }
+
+    const request =
+        "GET " + path + " HTTP/1.0\r\n" +
+        "Host: " + host + "\r\n" +
+        "Connection: close\r\n\r\n"
+
+    const written = catch await Network.write(stream, request.toBytes()) {
+        issue: NetworkIssue => {
+            return HttpIssue.new(issue.message)
+        }
+    }
+
+    let raw = ""
+    let done = false
+    while not done {
+        const chunk = catch await Network.read(stream, 4096) {
+            issue: NetworkIssue => {
+                return HttpIssue.new(issue.message)
+            }
+        }
+        if chunk.len == 0 {
+            done = true
+        } else {
+            raw = raw + String.fromBytes(chunk)
+        }
+    }
+
+    Network.close(stream)
+
+    const statusText = raw.substring(9, 12)
+    const status = statusText.parseInt()
+    const separator = raw.indexOf("\r\n\r\n")
+    let body = ""
+    if separator >= 0 {
+        body = raw.substring(separator + 4, raw.length())
+    }
+
+    return HttpResponse.new(status, body)
+}

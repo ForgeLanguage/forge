@@ -1,0 +1,13 @@
+use std.Net.TcpStream
+use std.Net.TcpListener
+use std.Net.NetworkIssue
+
+class
+
+public static native func listenTcp(port: Int): TcpListener, !NetworkIssue = "forge_net_listen_tcp"
+public static async native func acceptTcp(listener: TcpListener): TcpStream, !NetworkIssue = "forge_net_accept_tcp"
+public static async native func connectTcp(host: String, port: Int): TcpStream, !NetworkIssue = "forge_net_connect_tcp"
+public static async native func read(stream: TcpStream, maxBytes: Int): Byte[], !NetworkIssue = "forge_net_read"
+public static async native func write(stream: TcpStream, bytes: Byte[]): Int, !NetworkIssue = "forge_net_write"
+public static native func closeListener(listener: TcpListener): Void = "forge_net_close_listener"
+public static native func close(stream: TcpStream): Void = "forge_net_close"

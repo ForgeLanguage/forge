@@ -1,0 +1,13 @@
+use Console
+
+public static func main(): Int
+{
+    const urls = ["https://example.com", "https://google.com"]
+    Console.write[processUrl task[urls].concurrency(10).all().await()]
+    Console.write("a")
+    return 0
+}
+
+public static async func processUrl(url: String): String {
+    return url
+}

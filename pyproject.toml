@@ -1,0 +1,11 @@
+[project]
+name = "forge-language"
+version = "0.1.0"
+description = "Lexer and parser packages for the Forge language."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

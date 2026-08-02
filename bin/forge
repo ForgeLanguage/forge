@@ -1,0 +1,426 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+PYTHON="${PYTHON:-python3}"
+CC_BIN="${CC:-cc}"
+BUILD_DIR="${FORGE_BUILD_DIR:-.forge-build}"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  forge translate <source.forge> [-o output.c]
+  forge compile   <source-or-project> [-o output-binary] [--c-out output-dir]
+  forge run       <source-or-project> [-- program-args...]
+
+Commands:
+  translate  Generate C source.
+  compile    Generate one C source per Forge project file and compile with optimizations.
+  run        Generate one C source per Forge project file, compile without optimizations, and run.
+
+Environment:
+  PYTHON           Python executable, default: python3
+  CC               C compiler, default: cc
+  FORGE_BUILD_DIR  Build output directory, default: .forge-build
+EOF
+}
+
+die() {
+    printf 'forge: %s\n' "$*" >&2
+    exit 1
+}
+
+source_basename() {
+    local source="$1"
+    local base
+    base="$(basename -- "$source")"
+    printf '%s\n' "${base%.*}"
+}
+
+ensure_source() {
+    local source="$1"
+    [[ -f "$source" || -d "$source" ]] || die "source file or project not found: $source"
+}
+
+ensure_source_file() {
+    local source="$1"
+    [[ -f "$source" ]] || die "source file not found: $source"
+}
+
+emit_c() {
+    local source="$1"
+    local output="${2:-}"
+    ensure_source_file "$source"
+    PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON" - "$source" "$output" <<'PY'
+from pathlib import Path
+import sys
+
+from forge_c import emit_c
+from forge_parser import parse
+
+source_path = Path(sys.argv[1])
+output = sys.argv[2]
+c_source = emit_c(parse(source_path.read_text(), source_name=source_path.as_posix()))
+
+if output:
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    Path(output).write_text(c_source)
+else:
+    sys.stdout.write(c_source)
+PY
+}
+
+emit_c_files() {
+    local source="$1"
+    local output="$2"
+    ensure_source "$source"
+    PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON" - "$source" "$output" <<'PY'
+from pathlib import Path
+import sys
+
+from forge_c import emit_c_project
+
+def excepthook(exc_type, exc_value, exc_tb):
+    print(exc_value, file=sys.stderr)
+    sys.exit(1)
+
+sys.excepthook = excepthook
+
+source_path = Path(sys.argv[1])
+output = Path(sys.argv[2])
+result = emit_c_project(source_path, output)
+for source in result.sources:
+    print(f"SOURCE\t{source}")
+for include_dir in result.include_dirs:
+    print(f"INCLUDE_DIR\t{include_dir}")
+for library_dir in result.library_dirs:
+    print(f"LIBRARY_DIR\t{library_dir}")
+for library in result.libraries:
+    print(f"LIBRARY\t{library}")
+for framework in result.frameworks:
+    print(f"FRAMEWORK\t{framework}")
+for package in result.pkg_config:
+    print(f"PKG_CONFIG\t{package}")
+for flag in result.link_flags:
+    print(f"LINK_FLAG\t{flag}")
+PY
+}
+
+default_c_output_dir() {
+    local source="$1"
+    printf '%s/%s-c\n' "$BUILD_DIR" "$(source_basename "$source")"
+}
+
+default_binary_output() {
+    local source="$1"
+    printf '%s/%s\n' "$BUILD_DIR" "$(source_basename "$source")"
+}
+
+compile_c() {
+    local binary="$1"
+    local mode="$2"
+    shift 2
+    local -a compile_args=("$@")
+    mkdir -p -- "$(dirname -- "$binary")"
+    local -a flags
+
+    if [[ "$mode" == "release" ]]; then
+        flags=(-std=c11 -D_POSIX_C_SOURCE=200112L -D_DARWIN_C_SOURCE -Wall -Wextra -O2 -DNDEBUG)
+    else
+        flags=(-std=c11 -D_POSIX_C_SOURCE=200112L -D_DARWIN_C_SOURCE -Wall -Wextra -O0 -g)
+    fi
+
+    "$CC_BIN" "${flags[@]}" -Wno-unused-variable "${compile_args[@]}" -o "$binary"
+}
+
+write_compile_commands() {
+    local mode="$1"
+    local output_dir="$2"
+    shift 2
+    local -a compiler_flags=()
+    local -a c_files=()
+
+    while (($#)); do
+        if [[ "$1" == "--" ]]; then
+            shift
+            break
+        fi
+        compiler_flags+=("$1")
+        shift
+    done
+    c_files=("$@")
+
+    mkdir -p -- "$output_dir"
+    PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON" - "$mode" "$CC_BIN" "$output_dir" "${compiler_flags[@]}" -- "${c_files[@]}" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+mode = sys.argv[1]
+compiler = sys.argv[2]
+output_dir = Path(sys.argv[3])
+separator = sys.argv.index("--", 4)
+compiler_flags = sys.argv[4:separator]
+c_files = [Path(path) for path in sys.argv[separator + 1:]]
+
+if mode == "release":
+    mode_flags = ["-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DARWIN_C_SOURCE", "-Wall", "-Wextra", "-O2", "-DNDEBUG"]
+else:
+    mode_flags = ["-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DARWIN_C_SOURCE", "-Wall", "-Wextra", "-O0", "-g"]
+
+output_dir = output_dir.resolve()
+
+def portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(output_dir).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+def portable_flag(flag: str) -> str:
+    if not flag.startswith("-I"):
+        return flag
+    include = Path(flag[2:]).resolve()
+    try:
+        return "-I" + include.relative_to(output_dir).as_posix()
+    except ValueError:
+        return flag
+
+compiler_flags = [portable_flag(flag) for flag in compiler_flags]
+directory = "."
+entries = []
+for c_file in c_files:
+    object_file = Path(c_file.name + ".o")
+    file = portable_path(c_file)
+    arguments = [
+        compiler,
+        *mode_flags,
+        "-Wno-unused-variable",
+        *compiler_flags,
+        "-c",
+        file,
+        "-o",
+        object_file.as_posix(),
+    ]
+    entries.append(
+        {
+            "directory": directory,
+            "file": file,
+            "arguments": arguments,
+        }
+    )
+
+(output_dir / "compile_commands.json").write_text(json.dumps(entries, indent=2) + "\n")
+PY
+}
+
+pkg_config_flags() {
+    local package="$1"
+    command -v pkg-config >/dev/null 2>&1 || return 0
+    pkg-config --exists "$package" || return 0
+    pkg-config --cflags --libs "$package" || return 0
+}
+
+command_translate() {
+    local source=""
+    local output=""
+
+    while (($#)); do
+        case "$1" in
+            -o|--output)
+                shift
+                (($#)) || die "missing value for -o"
+                output="$1"
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -*)
+                die "unknown option for translate: $1"
+                ;;
+            *)
+                [[ -z "$source" ]] || die "translate accepts one source file"
+                source="$1"
+                ;;
+        esac
+        shift
+    done
+
+    [[ -n "$source" ]] || die "translate requires a source file"
+    emit_c "$source" "$output"
+}
+
+command_compile() {
+    local source=""
+    local binary=""
+    local c_output=""
+
+    while (($#)); do
+        case "$1" in
+            -o|--output)
+                shift
+                (($#)) || die "missing value for -o"
+                binary="$1"
+                ;;
+            --c-out)
+                shift
+                (($#)) || die "missing value for --c-out"
+                c_output="$1"
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -*)
+                die "unknown option for compile: $1"
+                ;;
+            *)
+                [[ -z "$source" ]] || die "compile accepts one source or project"
+                source="$1"
+                ;;
+        esac
+        shift
+    done
+
+    [[ -n "$source" ]] || die "compile requires a source file"
+    c_output="${c_output:-$(default_c_output_dir "$source")}"
+    binary="${binary:-$(default_binary_output "$source")}"
+    local -a c_files=()
+    local -a compiler_flags=()
+    local -a link_flags=()
+    local c_file_list
+    c_file_list="$(emit_c_files "$source" "$c_output")" || return 1
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        local kind value
+        IFS=$'\t' read -r kind value <<< "$line"
+        case "$kind" in
+            SOURCE) c_files+=("$value") ;;
+            INCLUDE_DIR) compiler_flags+=("-I$value") ;;
+            LIBRARY_DIR) link_flags+=("-L$value") ;;
+            LIBRARY) link_flags+=("-l$value") ;;
+            FRAMEWORK) link_flags+=("-framework" "$value") ;;
+            LINK_FLAG) link_flags+=("$value") ;;
+            PKG_CONFIG)
+                local pkg_flags
+                pkg_flags="$(pkg_config_flags "$value")"
+                if [[ -n "$pkg_flags" ]]; then
+                    local flag
+                    for flag in $pkg_flags; do
+                        link_flags+=("$flag")
+                    done
+                fi
+                ;;
+            *) die "unknown emitter output kind: $kind" ;;
+        esac
+    done <<< "$c_file_list"
+    ((${#c_files[@]})) || die "no C files to compile"
+    local -a compile_args=("${c_files[@]}")
+    if ((${#compiler_flags[@]})); then
+        compile_args=("${compiler_flags[@]}" "${compile_args[@]}")
+    fi
+    if ((${#link_flags[@]})); then
+        compile_args=("${compile_args[@]}" "${link_flags[@]}")
+    fi
+    write_compile_commands release "$c_output" "${compiler_flags[@]}" -- "${c_files[@]}"
+    compile_c "$binary" release "${compile_args[@]}"
+    printf '%s\n' "$binary"
+}
+
+command_run() {
+    local source=""
+    local -a program_args=()
+
+    while (($#)); do
+        case "$1" in
+            --)
+                shift
+                program_args=("$@")
+                break
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -*)
+                die "unknown option for run: $1"
+                ;;
+            *)
+                [[ -z "$source" ]] || die "run accepts one source or project before --"
+                source="$1"
+                ;;
+        esac
+        shift
+    done
+
+    [[ -n "$source" ]] || die "run requires a source file"
+    local c_output
+    local binary
+    c_output="${BUILD_DIR}/$(source_basename "$source")-c"
+    binary="$(default_binary_output "$source")"
+    local -a c_files=()
+    local -a compiler_flags=()
+    local -a link_flags=()
+    local c_file_list
+    c_file_list="$(emit_c_files "$source" "$c_output")" || return 1
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        local kind value
+        IFS=$'\t' read -r kind value <<< "$line"
+        case "$kind" in
+            SOURCE) c_files+=("$value") ;;
+            INCLUDE_DIR) compiler_flags+=("-I$value") ;;
+            LIBRARY_DIR) link_flags+=("-L$value") ;;
+            LIBRARY) link_flags+=("-l$value") ;;
+            FRAMEWORK) link_flags+=("-framework" "$value") ;;
+            LINK_FLAG) link_flags+=("$value") ;;
+            PKG_CONFIG)
+                local pkg_flags
+                pkg_flags="$(pkg_config_flags "$value")"
+                if [[ -n "$pkg_flags" ]]; then
+                    local flag
+                    for flag in $pkg_flags; do
+                        link_flags+=("$flag")
+                    done
+                fi
+                ;;
+            *) die "unknown emitter output kind: $kind" ;;
+        esac
+    done <<< "$c_file_list"
+    ((${#c_files[@]})) || die "no C files to compile"
+    local -a compile_args=("${c_files[@]}")
+    if ((${#compiler_flags[@]})); then
+        compile_args=("${compiler_flags[@]}" "${compile_args[@]}")
+    fi
+    if ((${#link_flags[@]})); then
+        compile_args=("${compile_args[@]}" "${link_flags[@]}")
+    fi
+    write_compile_commands debug "$c_output" "${compiler_flags[@]}" -- "${c_files[@]}"
+    compile_c "$binary" debug "${compile_args[@]}"
+    if ((${#program_args[@]})); then
+        "$binary" "${program_args[@]}"
+    else
+        "$binary"
+    fi
+}
+
+main() {
+    (($#)) || {
+        usage
+        exit 1
+    }
+
+    local command="$1"
+    shift
+    case "$command" in
+        translate) command_translate "$@" ;;
+        compile) command_compile "$@" ;;
+        run) command_run "$@" ;;
+        -h|--help|help) usage ;;
+        *) die "unknown command: $command" ;;
+    esac
+}
+
+main "$@"

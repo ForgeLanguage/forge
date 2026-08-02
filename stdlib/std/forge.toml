@@ -1,0 +1,8 @@
+[package]
+name = "std"
+version = "0.1.0"
+
+[native]
+includes = ["forge_std_net.h", "forge_std_string.h"]
+include_dirs = ["include"]
+sources = ["native/forge_std_net.c", "native/forge_std_string.c", "native/forge_std_json.c"]
