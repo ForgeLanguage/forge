@@ -60,7 +60,17 @@ from forge_parser.ast import Node
 
 Severity = Literal["error", "warning"]
 ScopeKind = Literal["module", "class", "function", "block"]
-SymbolKind = Literal["class", "trait", "interface", "struct", "enum", "function", "variable", "parameter"]
+SymbolKind = Literal[
+    "class",
+    "trait",
+    "interface",
+    "struct",
+    "enum",
+    "function",
+    "variable",
+    "parameter",
+    "type_parameter",
+]
 
 _VISIBILITY_MODIFIERS = frozenset({"public", "internal", "private"})
 _PROGRAM_ATTRIBUTES = frozenset({"multidef"})
@@ -279,6 +289,8 @@ class _Validator:
 
         self._class_stack.append(declaration)
         self._push_scope("class", declaration)
+        for parameter in declaration.type_parameters:
+            self._declare(parameter.name, "type_parameter", parameter, parameter.location)
         for interface in declaration.implements:
             self._visit_type_reference(interface)
         for trait in declaration.uses:

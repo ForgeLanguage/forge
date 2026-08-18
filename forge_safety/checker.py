@@ -995,6 +995,13 @@ class _SafetyChecker:
     def _visit_move(self, expression: MoveExpression) -> None:
         self._visit_expression(expression.expression)
         if not isinstance(expression.expression, IdentifierExpression):
+            if isinstance(expression.expression, CallExpression):
+                borrowed_result, _ = self._borrowed_result_origin(expression.expression)
+                if borrowed_result:
+                    self._error("Cannot move borrowed return value", expression)
+                    return
+                if self._is_resource_type(self.typecheck.types.type_of(expression.expression)):
+                    return
             self._error("'move' can only be applied to a local binding", expression)
             return
         symbol = self._resolved_symbol(expression.expression)

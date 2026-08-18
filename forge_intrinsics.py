@@ -20,6 +20,7 @@ STRING_INTRINSICS = {
         IntrinsicFunction("length", (), "Int", "forge_string_length"),
         IntrinsicFunction("isEmpty", (), "Bool", "forge_string_is_empty"),
         IntrinsicFunction("toBytes", (), "Byte[]", "forge_string_to_bytes"),
+        IntrinsicFunction("equals", ("String",), "Bool", "forge_string_equals"),
         IntrinsicFunction("indexOf", ("String",), "Int", "forge_string_index_of"),
         IntrinsicFunction("contains", ("String",), "Bool", "forge_string_contains"),
         IntrinsicFunction("startsWith", ("String",), "Bool", "forge_string_starts_with"),

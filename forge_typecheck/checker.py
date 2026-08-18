@@ -88,11 +88,13 @@ from .types import (
     TaskCollectionType,
     TaskType,
     Type,
+    TypeParameterType,
     apply_type_modifiers,
     builtin_type,
     is_assignable,
     is_numeric,
     is_unknown,
+    specialize_type,
 )
 
 
@@ -800,9 +802,17 @@ class _TypeChecker:
         elif isinstance(expression, CallExpression):
             result = self._call_type(expression)
         elif isinstance(expression, ArrayLiteralExpression):
-            result = self._array_literal_type(expression)
+            expected = self._expected_type_stack[-1] if self._expected_type_stack else None
+            result = self._array_literal_type(
+                expression,
+                expected=expected if isinstance(expected, ArrayType) else None,
+            )
         elif isinstance(expression, StructLiteralExpression):
-            result = self._struct_literal_type(expression, None)
+            expected = self._expected_type_stack[-1] if self._expected_type_stack else None
+            result = self._struct_literal_type(
+                expression,
+                expected if isinstance(expected, StructType) else None,
+            )
         elif isinstance(expression, BulkArgumentPack):
             for argument in expression.arguments:
                 self._visit_expression(argument)
@@ -1551,6 +1561,7 @@ class _TypeChecker:
         if symbol is None:
             return {}
         node = symbol.node
+        substitutions = self._type_parameter_substitutions(type_)
         fields: tuple[VariableDeclaration, ...]
         if isinstance(node, ClassDeclaration):
             fields = tuple(member for member in node.members if isinstance(member, VariableDeclaration))
@@ -1559,8 +1570,25 @@ class _TypeChecker:
         else:
             fields = ()
         return {
-            field.name: self._type_from_reference(field.type) if field.type is not None else UNKNOWN
+            field.name: (
+                specialize_type(self._type_from_reference(field.type), substitutions)
+                if field.type is not None
+                else UNKNOWN
+            )
             for field in fields
+        }
+
+    def _type_parameter_substitutions(
+        self,
+        type_: ClassType | StructType | InterfaceType,
+    ) -> dict[int, Type]:
+        symbol = type_.symbol
+        if symbol is None or not isinstance(symbol.node, ClassDeclaration):
+            return {}
+        return {
+            id(parameter_symbol): argument
+            for parameter, argument in zip(symbol.node.type_parameters, type_.type_arguments)
+            if (parameter_symbol := self.resolution.analysis.annotations.symbol_for(parameter)) is not None
         }
 
     def _bulk_call_type(self, expression: BulkCallExpression) -> Type:
@@ -2038,13 +2066,41 @@ class _TypeChecker:
             base = ClassType(resolved.name, resolved)
         elif isinstance(resolved, Symbol) and isinstance(resolved.node, EnumDeclaration):
             base = EnumType(resolved.name, resolved, self._enum_value_type(resolved.node))
+        elif isinstance(resolved, Symbol) and resolved.kind == "type_parameter":
+            base = TypeParameterType(resolved.name, resolved)
         else:
             base = UNKNOWN
         if reference.arguments and not isinstance(base, (TaskType, TaskCollectionType)):
-            self._error(
-                f"Type {base.display_name} does not accept type arguments",
-                reference,
+            declaration = None
+            if isinstance(base, (ClassType, StructType, InterfaceType)) and base.symbol is not None:
+                declaration = base.symbol.node
+            parameters = (
+                declaration.type_parameters
+                if isinstance(declaration, ClassDeclaration)
+                else ()
             )
+            if not parameters:
+                self._error(
+                    f"Type {base.display_name} does not accept type arguments",
+                    reference,
+                )
+            elif len(reference.arguments) != len(parameters):
+                self._error(
+                    f"Expected {len(parameters)} type arguments for {base.display_name}, "
+                    f"got {len(reference.arguments)}",
+                    reference,
+                )
+            else:
+                arguments = tuple(
+                    self._type_from_reference(argument)
+                    for argument in reference.arguments
+                )
+                if isinstance(base, ClassType):
+                    base = ClassType(base.name, base.symbol, arguments)
+                elif isinstance(base, StructType):
+                    base = StructType(base.name, base.symbol, arguments)
+                elif isinstance(base, InterfaceType):
+                    base = InterfaceType(base.name, base.symbol, arguments)
         result = apply_type_modifiers(
             base,
             array_depth=reference.array_depth,

@@ -122,6 +122,7 @@ from forge_typecheck import (
     UNKNOWN,
     VOID,
     Type,
+    TypeParameterType,
 )
 from forge_typecheck.types import apply_type_modifiers, builtin_type
 
@@ -1168,8 +1169,21 @@ class _Lowerer:
                 base = ClassType(resolved.name, resolved)
         elif isinstance(resolved, Symbol) and isinstance(resolved.node, EnumDeclaration):
             base = EnumType(resolved.name, resolved, UNKNOWN)
+        elif isinstance(resolved, Symbol) and resolved.kind == "type_parameter":
+            base = TypeParameterType(resolved.name, resolved)
         else:
             base = UNKNOWN
+        if reference.arguments and not isinstance(base, (TaskType, TaskCollectionType)):
+            arguments = tuple(
+                self._type_from_reference(argument)
+                for argument in reference.arguments
+            )
+            if isinstance(base, ClassType):
+                base = ClassType(base.name, base.symbol, arguments)
+            elif isinstance(base, StructType):
+                base = StructType(base.name, base.symbol, arguments)
+            elif isinstance(base, InterfaceType):
+                base = InterfaceType(base.name, base.symbol, arguments)
         return apply_type_modifiers(
             base,
             array_depth=reference.array_depth,

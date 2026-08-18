@@ -909,6 +909,100 @@ const runnable: Runnable = App.new()
 
         self.assertTrue(result.ok)
 
+    def test_array_literal_uses_contextual_interface_element_type(self) -> None:
+        program = parse(
+            """
+@multidef
+interface Runnable {
+    public func run(): Int
+}
+
+class One {
+    implements Runnable
+    public new() {}
+    public func run(): Int => 1
+}
+
+class Two {
+    implements Runnable
+    public new() {}
+    public func run(): Int => 2
+}
+
+const values: Runnable[] = [One.new(), Two.new()]
+"""
+        )
+
+        result = check_types(program)
+
+        self.assertTrue(result.ok)
+
+    def test_array_literal_uses_contextual_struct_element_type(self) -> None:
+        program = parse(
+            """
+struct Pair {
+    public name: String
+    public value: Int
+}
+
+const values: Pair[] = [{ name: "one", value: 1 }]
+"""
+        )
+
+        result = check_types(program)
+
+        self.assertTrue(result.ok)
+
+    def test_allows_type_arguments_for_user_generic_structs(self) -> None:
+        program = parse(
+            """
+@multidef
+struct Definition<T> {
+    public asSingle: Bool
+}
+
+class Logger {
+    public new() {}
+}
+
+struct Defs {
+    public logger: Definition<Logger>
+}
+"""
+        )
+
+        result = check_types(program)
+
+        self.assertTrue(result.ok)
+
+    def test_specializes_nullable_generic_struct_field(self) -> None:
+        program = parse(
+            """
+@multidef
+struct Definition<T> {
+    public instance: T?
+}
+
+class Logger {
+    public new() {}
+}
+
+struct Defs {
+    public logger: Definition<Logger>
+}
+
+const defs: Defs = {
+    logger: {
+        instance: Logger.new()
+    }
+}
+"""
+        )
+
+        result = check_types(program)
+
+        self.assertTrue(result.ok)
+
     def test_uses_requires_trait(self) -> None:
         result = check_types(
             parse(
@@ -1640,6 +1734,7 @@ const text = " Forge "
 const length: Int = text.length()
 const empty: Bool = text.isEmpty()
 const bytes: Byte[] = text.toBytes()
+const equals: Bool = text.equals(" Forge ")
 const index: Int = text.indexOf("or")
 const contains: Bool = text.contains("or")
 const starts: Bool = text.startsWith(" ")

@@ -1,8 +1,8 @@
 use std.Http.HttpServerHandler
 
 class
-public take user: HttpServerHandler
+public borrow user: HttpServerHandler
 
 public new(take user: HttpServerHandler) {
-    this.user = move user
+    this.user = user
 }

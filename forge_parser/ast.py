@@ -84,6 +84,7 @@ class ClassDeclaration(Declaration):
     kind: Literal["class", "trait", "interface", "struct"] = "class"
     implements: tuple[TypeReference, ...] = ()
     uses: tuple[TypeReference, ...] = ()
+    type_parameters: tuple[TypeParameter, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

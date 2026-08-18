@@ -1,0 +1,71 @@
+class
+
+#state defs: Dict<String, Bool> = {}
+#state graph: Dict<String, String[]> = {}
+#state eager: String[] = []
+#state built: Bool = false
+
+public new() {}
+
+public template func apply<T:struct>(defs: T): Void {
+    #{
+        if state.built {
+            Compiler.error("Cannot register services after DI build")
+        }
+    #}
+
+    #for Reflection.type<T>().fields as field {
+        #{
+            const service = field.type.arguments[0].name
+
+            if state.defs.contains(service) {
+                Compiler.error("Service already registered: #{service}")
+            }
+
+            state.defs[service] = true
+            state.graph[service] = []
+
+            for parameter in field.type.arguments[0].constructor.parameters {
+                if parameter.type.isSimple == false {
+                    state.graph[service].add(parameter.type.name)
+                }
+            }
+        #}
+    #}
+}
+
+public template func build(): Void {
+    #{
+        for service in state.graph {
+            for dependency in state.graph[service] {
+                if state.defs.contains(dependency) == false {
+                    Compiler.error("Missing dependency for #{service}: #{dependency}")
+                }
+            }
+        }
+
+        const cycle = Graph.findCycle(state.graph)
+        if cycle != null {
+            const path = cycle.join(" -> ")
+            Compiler.error("Circular dependency: #{path}")
+        }
+
+        state.built = true
+    #}
+}
+
+public template func resolve<T:class>(): T {
+    #{
+        const service = Reflection.type<T>().name
+
+        if state.built == false {
+            Compiler.error("Cannot resolve service before DI build: #{service}")
+        }
+
+        if state.defs.contains(service) == false {
+            Compiler.error("Service is not registered: #{service}")
+        }
+    #}
+
+    return #{Reflection.construct<T>()}
+}

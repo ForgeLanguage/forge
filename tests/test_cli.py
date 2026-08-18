@@ -1415,306 +1415,6 @@ func main(): Void {{
         self.assertEqual(result.stdout, "2\n1\n1\n0\n")
 
     @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
-    def test_run_feedor_http_driver_maps_local_http_statuses(self) -> None:
-        statuses = [200, 204, 429, 500]
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            server.bind(("127.0.0.1", 0))
-        except PermissionError as exc:
-            server.close()
-            self.skipTest(f"Loopback sockets are not available: {exc}")
-        server.listen(len(statuses))
-        server.settimeout(10)
-        port = server.getsockname()[1]
-
-        def serve() -> None:
-            try:
-                for status in statuses:
-                    try:
-                        connection, _ = server.accept()
-                    except TimeoutError:
-                        return
-                    with connection:
-                        connection.recv(4096)
-                        connection.sendall(
-                            f"HTTP/1.0 {status} Test\r\n"
-                            "Content-Length: 0\r\n"
-                            "\r\n"
-                        .encode("ascii"))
-            finally:
-                server.close()
-
-        thread = threading.Thread(target=serve, daemon=True)
-        thread.start()
-        try:
-            with tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                package_root = root / "packages" / "Feedor"
-                (root / "src").mkdir(parents=True)
-                (package_root).mkdir(parents=True)
-                shutil.copytree(PROJECT_ROOT / "Feedor" / "src" / "Feedor", package_root / "src")
-                (package_root / "forge.toml").write_text(
-                    """
-[package]
-name = "Feedor"
-version = "0.1.0"
-"""
-                )
-                (root / "forge.toml").write_text(
-                    """
-entry_point = "./src/main.forge"
-packages_path = "./packages/"
-
-[dependencies]
-Feedor = "0.1.0"
-std = "0.1.0"
-"""
-                )
-                (root / "forge.lock").write_text('Feedor = "0.1.0"\nstd = "0.1.0"\n')
-                (root / "src" / "main.forge").write_text(
-                    f"""
-use Feedor.ClientHints
-use Feedor.FeedorApp
-use Feedor.FeedDriver
-use Feedor.FeedRequest
-use Feedor.HttpFeedDriver
-use Feedor.User
-
-func makeUser(): User {{
-    const user: User = {{
-        userAgent: "Forge HTTP driver",
-        ip: "127.0.0.1",
-        id: "user-1",
-        acceptLang: "en",
-        createdTimestamp: 0,
-        domain: "example.test",
-        geoCode: 1,
-        zoneId: 10,
-        userActivity: 0,
-        osId: 1,
-        viewsCount: 0,
-        iframeStatus: 0
-    }}
-    return user
-}}
-
-func makeHints(): ClientHints {{
-    const hints: ClientHints = {{
-        osVersion: "macOS",
-        model: "desktop"
-    }}
-    return hints
-}}
-
-func makeRequest(bannerId: Int): FeedRequest {{
-    const request: FeedRequest = {{
-        bannerId: bannerId,
-        sourceSystem: "forge-http-driver",
-        traceId: "trace-http",
-        user: makeUser(),
-        count: 1,
-        referrer: "https://example.test",
-        zoneId: 10,
-        timeoutMs: 1000,
-        pubVar: "pub-var",
-        subscriptionId: 1,
-        siteCategoryId: 0,
-        clientHints: makeHints(),
-        ruid: "ruid-1",
-        batteryLevel: 1.0,
-        batteryOnCharge: true,
-        var3: ""
-    }}
-    return request
-}}
-
-func main(): Void {{
-    const driver: FeedDriver = HttpFeedDriver.new("http://127.0.0.1:{port}/feed")
-    const app = FeedorApp.new(driver)
-    print app.getFeed(makeRequest(42)).await().status.coden
-    print app.getFeed(makeRequest(7)).await().status.coden
-    print app.getFeed(makeRequest(13)).await().status.coden
-    print app.getFeed(makeRequest(500)).await().status.coden
-}}
-"""
-                )
-
-                result = subprocess.run(
-                    [str(FORGE), "run", str(root)],
-                    cwd=PROJECT_ROOT,
-                    text=True,
-                    capture_output=True,
-                    check=True,
-                    timeout=30,
-                )
-        finally:
-            thread.join(timeout=12)
-
-        self.assertEqual(result.stdout, "2\n6\n13\n2\n")
-
-    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
-    def test_run_feedor_forge_server_endpoint(self) -> None:
-        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            probe.bind(("127.0.0.1", 8080))
-        except OSError as exc:
-            probe.close()
-            self.skipTest(f"Feedor development port 8080 is unavailable: {exc}")
-        probe.close()
-
-        with tempfile.TemporaryDirectory() as directory:
-            binary = Path(directory) / "feedor"
-            subprocess.run(
-                [
-                    str(FORGE),
-                    "compile",
-                    str(PROJECT_ROOT / "Feedor"),
-                    "-o",
-                    str(binary),
-                ],
-                cwd=PROJECT_ROOT,
-                text=True,
-                capture_output=True,
-                check=True,
-                timeout=30,
-            )
-            process = subprocess.Popen(
-                [str(binary)],
-                cwd=PROJECT_ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            try:
-                with self.connect_to_process(process, 8080) as connection:
-                    connection.sendall(
-                        b"GET /get_banner_list HTTP/1.1\r\n"
-                        b"Host: 127.0.0.1\r\n"
-                        b"Connection: close\r\n"
-                        b"\r\n"
-                    )
-                    chunks: list[bytes] = []
-                    while True:
-                        chunk = connection.recv(4096)
-                        if not chunk:
-                            break
-                        chunks.append(chunk)
-            finally:
-                self.terminate_process(process)
-
-        raw = b"".join(chunks)
-        head, body = raw.split(b"\r\n\r\n", 1)
-        self.assertTrue(head.startswith(b"HTTP/1.1 200 "))
-        self.assertIn(b"Content-Type: application/json", head)
-        self.assertEqual(body, b'{"count":0}')
-
-    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
-    def test_run_feedor_http_handler_routes_simple_endpoints(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            package_root = root / "packages" / "Feedor"
-            (root / "src").mkdir(parents=True)
-            package_root.mkdir(parents=True)
-            shutil.copytree(PROJECT_ROOT / "Feedor" / "src" / "Feedor", package_root / "src")
-            (package_root / "forge.toml").write_text(
-                """
-[package]
-name = "Feedor"
-version = "0.1.0"
-"""
-            )
-            (root / "forge.toml").write_text(
-                """
-entry_point = "./src/main.forge"
-packages_path = "./packages/"
-
-[dependencies]
-Feedor = "0.1.0"
-std = "0.1.0"
-"""
-            )
-            (root / "forge.lock").write_text('Feedor = "0.1.0"\nstd = "0.1.0"\n')
-            (root / "src" / "main.forge").write_text(
-                """
-use Feedor.FeedDriver
-use Feedor.FeedorApp
-use Feedor.HttpContract
-use Feedor.HttpHandler
-use Feedor.MockFeedDriver
-
-func main(): Void {
-    const driver: FeedDriver = MockFeedDriver.new()
-    const app = FeedorApp.new(driver)
-    const handler = HttpHandler.new(move app)
-
-    const bannerList = handler.handle(HttpContract.getBannerListPath(), "")
-    print bannerList.statusCode
-    print bannerList.body
-
-    const postback = handler.handle(
-        HttpContract.postbackUrlPath(),
-        "{\\"encodedPostbacks\\":\\"p\\",\\"traceId\\":\\"t\\",\\"bannerId\\":42,\\"userId\\":\\"u\\",\\"geo\\":\\"US\\",\\"zoneId\\":10,\\"extId\\":\\"e\\",\\"lang\\":\\"en\\",\\"userAgent\\":\\"ua\\",\\"ip\\":\\"127.0.0.1\\",\\"lifeTime\\":1,\\"externalId\\":\\"x\\",\\"subscriptionId\\":1,\\"createdTimestamp\\":0,\\"userActivity\\":0,\\"bidRevenue\\":1.25}"
-    )
-    print postback.statusCode
-    print postback.body
-
-    const winNotice = handler.handle(
-        HttpContract.winNoticeUrlPath(),
-        "{\\"winNoticeUrl\\":\\"https://example.test/win\\",\\"bannerId\\":-1}"
-    )
-    print winNotice.statusCode
-    print winNotice.body
-
-    const feed = handler.handle(
-        HttpContract.getFeedPath(),
-        "{\\"bannerId\\":42,\\"sourceSystem\\":\\"forge-handler\\",\\"traceId\\":\\"trace-feed\\",\\"user\\":{\\"userAgent\\":\\"ua\\",\\"ip\\":\\"127.0.0.1\\",\\"id\\":\\"u\\",\\"acceptLang\\":\\"en\\",\\"createdTimestamp\\":0,\\"domain\\":\\"example.test\\",\\"geoCode\\":1,\\"zoneId\\":10,\\"userActivity\\":0,\\"osId\\":1,\\"viewsCount\\":0,\\"iframeStatus\\":0},\\"count\\":1,\\"referrer\\":\\"https://example.test\\",\\"zoneId\\":10,\\"timeoutMs\\":1000,\\"origHeaders\\":[{\\"name\\":\\"X-Trace\\",\\"value\\":\\"trace-feed\\"}],\\"pubVar\\":\\"pub\\",\\"subscriptionId\\":1,\\"siteCategoryId\\":0,\\"clientHints\\":{\\"osVersion\\":\\"macOS\\",\\"model\\":\\"desktop\\"},\\"ruid\\":\\"ruid\\",\\"batteryLevel\\":1.0,\\"batteryOnCharge\\":true,\\"var3\\":\\"\\"}"
-    )
-    print feed.statusCode
-    print feed.body
-
-    const multi = handler.handle(
-        HttpContract.getFeedMultiPath(),
-        "{\\"bannerIds\\":[42,7],\\"sourceSystem\\":\\"forge-handler\\",\\"traceId\\":\\"trace-multi\\",\\"user\\":{\\"userAgent\\":\\"ua\\",\\"ip\\":\\"127.0.0.1\\",\\"id\\":\\"u\\",\\"acceptLang\\":\\"en\\",\\"createdTimestamp\\":0,\\"domain\\":\\"example.test\\",\\"geoCode\\":1,\\"zoneId\\":10,\\"userActivity\\":0,\\"osId\\":1,\\"viewsCount\\":0,\\"iframeStatus\\":0},\\"count\\":2,\\"referrer\\":\\"https://example.test\\",\\"zoneId\\":10,\\"timeoutMs\\":1000,\\"origHeaders\\":[{\\"name\\":\\"X-Trace\\",\\"value\\":\\"trace-multi\\"}],\\"pubVar\\":\\"pub\\",\\"subscriptionId\\":1,\\"siteCategoryId\\":0,\\"clientHints\\":{\\"osVersion\\":\\"macOS\\",\\"model\\":\\"desktop\\"},\\"ruid\\":\\"ruid\\",\\"batteryLevel\\":1.0,\\"batteryOnCharge\\":true,\\"var3\\":\\"\\"}"
-    )
-    print multi.statusCode
-    print multi.body
-
-    const missing = handler.handle("/missing", "")
-    print missing.statusCode
-    print missing.body
-
-    const badFeed = handler.handle(HttpContract.getFeedPath(), "not-json")
-    print badFeed.statusCode
-    print badFeed.body
-}
-"""
-            )
-
-            result = subprocess.run(
-                [str(FORGE), "run", str(root)],
-                cwd=PROJECT_ROOT,
-                text=True,
-                capture_output=True,
-                check=True,
-                timeout=10,
-            )
-
-        self.assertEqual(
-            result.stdout,
-            '200\n{"count":0}\n'
-            '200\n{"accepted":true}\n'
-            '200\n{"accepted":false}\n'
-            '200\n{"status":{"code":0,"label":"OK","isError":false},"network":"mock","bannerId":42,'
-            '"banner":{"title":"banner","text":"Mock banner","icon":"","image":"","url":"https://example.test/click",'
-            '"externalId":"mock-42","winNoticeUrl":"","bidRevenue":1.5,"cpcPrice":0.1,"cpcCurrency":"USD",'
-            '"priceModel":1,"encodedPostbacks":"","clickExpire":60,"maxBidRevenue":2,"badge":"","htmlAdmarkup":""},'
-            '"extendedPostback":false}\n'
-            '200\n{"count":2,"okCount":1,"noContentCount":1,"firstStatus":{"code":0,"label":"OK","isError":false}}\n'
-            '404\n{"error":"not_found"}\n'
-            '400\n{"error":"bad_request","message":"expected value"}\n',
-        )
-
-    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
     def test_run_task_collection_all_sync_backend(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "app.forge"
@@ -1907,6 +1607,238 @@ public static native func answer(): Int = "native_answer"
             )
 
         self.assertEqual(result.returncode, 42, result.stderr)
+
+    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
+    def test_run_bundled_std_di_resolves_constructor_dependencies_without_runtime_reflection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "forge.toml").write_text(
+                """
+entry_point = "./src/main.forge"
+
+[dependencies]
+std = "0.1.0"
+"""
+            )
+            (root / "forge.lock").write_text('std = "0.1.0"\n')
+            (root / "src" / "main.forge").write_text(
+                """
+@multidef
+use std.Di.DiContainer
+
+class Foo {
+    public func name(): String => "foo"
+}
+
+class Bar {
+    public new(public take foo: Foo) {}
+}
+
+func main(): Void {
+    const bar: Bar = DiContainer.resolve<Bar>()
+    print bar.foo.name()
+}
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "run", str(root)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "foo\n")
+
+    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
+    def test_run_bundled_std_di_resolve_all_uses_compile_time_interface_implementations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "forge.toml").write_text(
+                """
+entry_point = "./src/main.forge"
+
+[dependencies]
+std = "0.1.0"
+"""
+            )
+            (root / "forge.lock").write_text('std = "0.1.0"\n')
+            (root / "src" / "main.forge").write_text(
+                """
+@multidef
+use std.Di.DiContainer
+
+interface Service {
+    public func name(): String
+}
+
+class First {
+    implements Service
+
+    public func name(): String => "first"
+}
+
+class Second {
+    implements Service
+
+    public func name(): String => "second"
+}
+
+func main(): Void {
+    const services: Service[] = DiContainer.resolveAll<Service>()
+    print services.len
+    print services[0].name()
+    print services[1].name()
+}
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "run", str(root)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "2\nfirst\nsecond\n")
+
+    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
+    def test_run_bundled_std_di_resolve_with_uses_compile_time_named_parameters(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "forge.toml").write_text(
+                """
+entry_point = "./src/main.forge"
+
+[dependencies]
+std = "0.1.0"
+"""
+            )
+            (root / "forge.lock").write_text('std = "0.1.0"\n')
+            (root / "src" / "main.forge").write_text(
+                """
+@multidef
+use std.Di.DiBoolParameter
+use std.Di.DiContainer
+use std.Di.DiIntParameter
+use std.Di.DiStringParameter
+
+class Foo {
+    public func name(): String => "foo"
+}
+
+class Configured {
+    public new(
+        public name: String,
+        public count: Int,
+        public enabled: Bool,
+        public take foo: Foo
+    ) {}
+}
+
+func main(): Void {
+    const strings: DiStringParameter[] = [{ name: "name", value: "alice" }]
+    const ints: DiIntParameter[] = [{ name: "count", value: 7 }]
+    const bools: DiBoolParameter[] = [{ name: "enabled", value: true }]
+    const configured: Configured = DiContainer.resolveWith<Configured>(strings, ints, bools)
+    print configured.name
+    print configured.count
+    print configured.enabled
+    print configured.foo.name()
+}
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "run", str(root)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "alice\n7\n1\nfoo\n")
+
+    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
+    def test_run_bundled_std_di_builder_resolves_with_compile_time_parameters(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "forge.toml").write_text(
+                """
+entry_point = "./src/main.forge"
+
+[dependencies]
+std = "0.1.0"
+"""
+            )
+            (root / "forge.lock").write_text('std = "0.1.0"\n')
+            (root / "src" / "main.forge").write_text(
+                """
+@multidef
+use std.Di.DiBuilder
+use std.Di.DiBoolParameter
+use std.Di.DiIntParameter
+use std.Di.DiStringParameter
+
+interface Service {
+    public func name(): String
+}
+
+class First {
+    implements Service
+    public func name(): String => "first"
+}
+
+class Foo {
+    public func name(): String => "foo"
+}
+
+class Configured {
+    public new(
+        public name: String,
+        public count: Int,
+        public enabled: Bool,
+        public take foo: Foo
+    ) {}
+}
+
+func main(): Void {
+    const builder = DiBuilder.create(
+        [{ name: "name", value: "alice" }],
+        [{ name: "count", value: 7 }],
+        [{ name: "enabled", value: true }]
+    )
+    const configured: Configured = DiBuilder.resolve<Configured>(builder)
+    const services: Service[] = DiBuilder.resolveAll<Service>(builder)
+    print configured.name
+    print configured.count
+    print configured.enabled
+    print configured.foo.name()
+    print services.len
+    print services[0].name()
+}
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "run", str(root)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "alice\n7\n1\nfoo\n1\nfirst\n")
 
     @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
     def test_run_reports_forge_errors_before_invoking_c_compiler(self) -> None:

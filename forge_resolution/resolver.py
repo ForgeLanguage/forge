@@ -478,7 +478,7 @@ class _Resolver:
             return None
 
         symbol = self._lookup(type_reference.name, self._scope_for(type_reference))
-        if symbol is None or symbol.kind not in {"class", "trait", "interface", "struct", "enum"}:
+        if symbol is None or symbol.kind not in {"class", "trait", "interface", "struct", "enum", "type_parameter"}:
             return None
         return symbol
 

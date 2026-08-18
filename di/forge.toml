@@ -1,0 +1,5 @@
+entry_point = "./src/main.forge"
+packages_path = "./packages/"
+
+[dependencies]
+std = "0.1.0"

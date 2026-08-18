@@ -1,0 +1,42 @@
+[
+  {
+    "directory": ".",
+    "file": "forge_runtime.c",
+    "arguments": [
+      "cc",
+      "-std=c11",
+      "-D_POSIX_C_SOURCE=200112L",
+      "-D_DARWIN_C_SOURCE",
+      "-Wall",
+      "-Wextra",
+      "-O0",
+      "-g",
+      "-Wno-unused-variable",
+      "-I.",
+      "-c",
+      "forge_runtime.c",
+      "-o",
+      "forge_runtime.c.o"
+    ]
+  },
+  {
+    "directory": ".",
+    "file": "loop_condition_preludes.c",
+    "arguments": [
+      "cc",
+      "-std=c11",
+      "-D_POSIX_C_SOURCE=200112L",
+      "-D_DARWIN_C_SOURCE",
+      "-Wall",
+      "-Wextra",
+      "-O0",
+      "-g",
+      "-Wno-unused-variable",
+      "-I.",
+      "-c",
+      "loop_condition_preludes.c",
+      "-o",
+      "loop_condition_preludes.c.o"
+    ]
+  }
+]

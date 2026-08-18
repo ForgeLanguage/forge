@@ -1,0 +1,14 @@
+use BundleFirst.BundleFirst
+use BundleFirst.Defs
+use Logger
+use std.Di.DiContainer
+
+func main(): Void {
+    const container = DiContainer.new()
+    const defs: Defs = BundleFirst.defs()
+
+    container.apply<Defs>(defs)
+    container.build()
+
+    const logger = container.resolve<Logger>()
+}

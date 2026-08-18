@@ -22,6 +22,7 @@ from .types import (
     TaskCollectionType,
     TaskType,
     Type,
+    TypeParameterType,
 )
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "TaskType",
     "TaskCollectionType",
     "Type",
+    "TypeParameterType",
     "TypeCheckError",
     "TypeCheckResult",
     "TypeTable",

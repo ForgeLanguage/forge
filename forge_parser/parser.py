@@ -215,6 +215,7 @@ class Parser:
     def _class_declaration(self, modifiers: tuple[str, ...]) -> ClassDeclaration:
         keyword = self._previous()
         name = self._advance().lexeme if self._check(TokenKind.IDENTIFIER) else None
+        type_parameters = self._function_type_parameters() if name is not None or self._check(TokenKind.LESS) else ()
         if name is None and "multidef" not in self._attributes:
             name = self._inferred_type_name()
         members: list[Declaration | Statement] = []
@@ -242,6 +243,7 @@ class Parser:
             keyword.lexeme,
             tuple(implements),
             tuple(uses),
+            type_parameters,
         )
 
     def _enum_declaration(self, modifiers: tuple[str, ...]) -> EnumDeclaration:

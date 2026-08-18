@@ -1,0 +1,23 @@
+@multidef
+
+use std.Di.Definition
+use Logger
+
+struct Defs
+{
+    public logger: Definition<Logger>
+}
+
+class BundleFirst
+{
+    public static func defs(): Defs
+    {
+        return {
+            logger: {
+                asSingle: true,
+                asEager: false,
+                instance: Logger.new()
+            }
+        }
+    }
+}

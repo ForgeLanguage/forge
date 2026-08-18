@@ -1,0 +1,5 @@
+struct Definition<T> {
+    public asSingle: Bool = true
+    public asEager: Bool = false
+    public instance: T? = null
+}

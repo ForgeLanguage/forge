@@ -26,11 +26,21 @@ class BuiltinType(Type):
 @dataclass(frozen=True, slots=True)
 class ClassType(Type):
     symbol: Symbol | None = None
+    type_arguments: tuple[Type, ...] = ()
+
+    @property
+    def display_name(self) -> str:
+        return _generic_display_name(self.name, self.type_arguments)
 
 
 @dataclass(frozen=True, slots=True)
 class StructType(Type):
     symbol: Symbol | None = None
+    type_arguments: tuple[Type, ...] = ()
+
+    @property
+    def display_name(self) -> str:
+        return _generic_display_name(self.name, self.type_arguments)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +51,16 @@ class EnumType(Type):
 
 @dataclass(frozen=True, slots=True)
 class InterfaceType(Type):
+    symbol: Symbol | None = None
+    type_arguments: tuple[Type, ...] = ()
+
+    @property
+    def display_name(self) -> str:
+        return _generic_display_name(self.name, self.type_arguments)
+
+
+@dataclass(frozen=True, slots=True)
+class TypeParameterType(Type):
     symbol: Symbol | None = None
 
 
@@ -130,6 +150,13 @@ UNKNOWN = BuiltinType("<unknown>")
 NUMERIC_TYPES = frozenset({INT, DOUBLE})
 
 
+def _generic_display_name(name: str, type_arguments: tuple[Type, ...]) -> str:
+    if not type_arguments:
+        return name
+    arguments = ", ".join(argument.display_name for argument in type_arguments)
+    return f"{name}<{arguments}>"
+
+
 def normalize_builtin_name(name: str) -> str:
     """Return the canonical built-in type name for a parsed type reference."""
 
@@ -194,6 +221,52 @@ def is_unknown(type_: Type) -> bool:
 
 def is_numeric(type_: Type) -> bool:
     return type_ in NUMERIC_TYPES
+
+
+def specialize_type(type_: Type, substitutions: dict[int, Type]) -> Type:
+    if (
+        isinstance(type_, TypeParameterType)
+        and type_.symbol is not None
+        and id(type_.symbol) in substitutions
+    ):
+        return substitutions[id(type_.symbol)]
+    if isinstance(type_, NullableType):
+        inner = specialize_type(type_.inner_type, substitutions)
+        if inner == type_.inner_type:
+            return type_
+        return NullableType(f"{inner.name}?", inner)
+    if isinstance(type_, ArrayType):
+        element = specialize_type(type_.element_type, substitutions)
+        if element == type_.element_type:
+            return type_
+        suffix = "[]" if type_.size is None else f"[{type_.size}]"
+        return ArrayType(f"{element.name}{suffix}", element, type_.size)
+    if isinstance(type_, TaskType):
+        result = specialize_type(type_.result_type, substitutions)
+        if result == type_.result_type:
+            return type_
+        return TaskType(f"Task<{result.display_name}>", result)
+    if isinstance(type_, TaskCollectionType):
+        result = specialize_type(type_.result_type, substitutions)
+        if result == type_.result_type:
+            return type_
+        return TaskCollectionType(f"TaskCollection<{result.display_name}>", result)
+    if isinstance(type_, ClassType):
+        arguments = tuple(specialize_type(argument, substitutions) for argument in type_.type_arguments)
+        if arguments == type_.type_arguments:
+            return type_
+        return ClassType(type_.name, type_.symbol, arguments)
+    if isinstance(type_, StructType):
+        arguments = tuple(specialize_type(argument, substitutions) for argument in type_.type_arguments)
+        if arguments == type_.type_arguments:
+            return type_
+        return StructType(type_.name, type_.symbol, arguments)
+    if isinstance(type_, InterfaceType):
+        arguments = tuple(specialize_type(argument, substitutions) for argument in type_.type_arguments)
+        if arguments == type_.type_arguments:
+            return type_
+        return InterfaceType(type_.name, type_.symbol, arguments)
+    return type_
 
 
 def is_assignable(source: Type, target: Type) -> bool:

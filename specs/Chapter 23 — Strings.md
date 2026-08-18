@@ -41,6 +41,7 @@ value.substring(1, value.length())
 text.length(): Int
 text.isEmpty(): Bool
 text.toBytes(): Byte[]
+text.equals(other: String): Bool
 text.indexOf(needle: String): Int
 text.contains(needle: String): Bool
 text.startsWith(prefix: String): Bool
@@ -53,6 +54,9 @@ text.replace(old: String, replacement: String): String
 text.split(separator: String, limit: Int): String[]
 text.parseInt(): Int
 ```
+
+`equals()` сравнивает содержимое строк побайтно. Оператор `==` для `String`
+пока не является пользовательским строковым сравнением.
 
 `indexOf()` возвращает байтовый индекс первого совпадения или `-1`. Пустая
 искомая строка находится в позиции `0`; `contains("")`, `startsWith("")` и

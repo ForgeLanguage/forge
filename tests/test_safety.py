@@ -132,6 +132,46 @@ func passOn(profile: Profile): Void {
             "Cannot move borrowed resource 'profile'",
         )
 
+    def test_allows_move_of_owned_call_result(self) -> None:
+        program = parse(
+            """
+@multidef
+class Profile {}
+class User {
+    public take profile: Profile
+    public new(take profile: Profile) {
+        this.profile = move profile
+    }
+}
+func makeProfile(): Profile => Profile.new()
+const user = User.new(move makeProfile())
+"""
+        )
+
+        result = check_safety(program)
+
+        self.assertTrue(result.ok)
+
+    def test_rejects_move_of_borrowed_call_result(self) -> None:
+        program = parse(
+            """
+class Profile {}
+borrow func borrowed(profile: Profile): Profile => profile
+func consume(take profile: Profile): Void {}
+func main(): Void {
+    let profile: Profile
+    consume(move borrowed(profile))
+}
+"""
+        )
+
+        result = check_safety(program, raise_on_error=False)
+
+        self.assertEqual(
+            result.diagnostics[0].message,
+            "Cannot move borrowed return value",
+        )
+
     def test_field_assignment_consumes_owned_local(self) -> None:
         program = parse(
             """

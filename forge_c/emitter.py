@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields, is_dataclass
 from pathlib import PurePath
 import re
 from typing import TypeAlias
@@ -77,6 +77,7 @@ from forge_typecheck import (
     TaskCollectionType,
     TaskType,
     Type,
+    TypeParameterType,
 )
 
 Input = Program | LoweringResult | IrProgram
@@ -172,11 +173,15 @@ class _Emitter:
     _async_native_task_collections: dict[str, _AsyncNativeTaskCollectionContext] = field(default_factory=dict)
 
     def emit_program(self, program: IrProgram, *, preamble: str = "") -> str:
+        specialization_chunks = [] if self.declarations_in_header else [
+            self._emit_generic_struct_specialization(type_)
+            for type_ in self._generic_struct_specializations(program)
+        ]
         body_chunks = [
             self._emit_top_level(item)
             for item in program.declarations
         ]
-        body = "\n\n".join(chunk for chunk in body_chunks if chunk)
+        body = "\n\n".join(chunk for chunk in (*specialization_chunks, *body_chunks) if chunk)
         helpers = self._emit_helpers()
         includes = self._emit_includes()
         chunks = [chunk for chunk in (preamble.rstrip(), includes, helpers, body) if chunk]
@@ -186,8 +191,14 @@ class _Emitter:
     def emit_header(self, program: IrProgram) -> str:
         type_declarations: list[str] = []
         declarations: list[str] = []
+        type_declarations.extend(
+            self._emit_generic_struct_specialization(type_)
+            for type_ in self._generic_struct_specializations(program)
+        )
         for item in program.declarations:
             if isinstance(item, IrClass):
+                if self._is_generic_class_declaration(item):
+                    continue
                 type_declarations.extend(self._class_type_header_declarations(item))
                 declarations.extend(self._class_member_header_declarations(item))
             elif isinstance(item, IrEnum):
@@ -552,6 +563,8 @@ typedef struct {{
 
     def _emit_top_level(self, node) -> str:
         if isinstance(node, IrClass):
+            if self._is_generic_class_declaration(node):
+                return ""
             return self._emit_class(node)
         if isinstance(node, IrEnum):
             return self._emit_enum(node)
@@ -564,6 +577,240 @@ typedef struct {{
         if isinstance(node, IrStatement):
             return self._emit_statement(node)
         return ""
+
+    def _is_generic_class_declaration(self, class_: IrClass) -> bool:
+        node = class_.symbol.node if class_.symbol is not None else None
+        return isinstance(node, ClassDeclaration) and bool(node.type_parameters)
+
+    def _generic_struct_specializations(self, program: IrProgram) -> tuple[StructType, ...]:
+        found: dict[str, StructType] = {}
+        generic_classes = {
+            id(declaration.symbol): declaration
+            for declaration in program.declarations
+            if isinstance(declaration, IrClass)
+            and declaration.symbol is not None
+            and self._is_generic_class_declaration(declaration)
+        }
+
+        def visit_type(type_: Type) -> None:
+            if isinstance(type_, NullableType):
+                visit_type(type_.inner_type)
+            elif isinstance(type_, ArrayType):
+                visit_type(type_.element_type)
+            elif isinstance(type_, (TaskType, TaskCollectionType)):
+                visit_type(type_.result_type)
+            elif isinstance(type_, FunctionType):
+                for parameter_type in type_.parameter_types:
+                    visit_type(parameter_type)
+                visit_type(type_.return_type)
+                for outcome in type_.outcomes:
+                    visit_type(outcome.type)
+            elif isinstance(type_, StructType):
+                for argument in type_.type_arguments:
+                    visit_type(argument)
+                if self._is_generic_struct_type(type_):
+                    found[self._class_type_c_name(type_)] = type_
+            elif isinstance(type_, (ClassType, InterfaceType)):
+                for argument in type_.type_arguments:
+                    visit_type(argument)
+
+        def visit_node(node) -> None:
+            if isinstance(node, IrClass):
+                for member in node.members:
+                    visit_node(member)
+                for interface_type in node.implements:
+                    visit_type(interface_type)
+            elif isinstance(node, IrEnum):
+                visit_type(node.value_type)
+                for variant in node.variants:
+                    if variant.value is not None:
+                        visit_node(variant.value)
+            elif isinstance(node, IrFunction):
+                visit_type(node.function_type)
+                for parameter in node.parameters:
+                    visit_type(parameter.type)
+                for statement in node.body.statements:
+                    visit_node(statement)
+            elif isinstance(node, IrVariable):
+                visit_type(node.type)
+                if node.initializer is not None:
+                    visit_node(node.initializer)
+            elif isinstance(node, IrStructLiteral):
+                visit_type(node.type)
+                for field in node.fields:
+                    visit_node(field.value)
+            else:
+                values = (
+                    getattr(node, field.name)
+                    for field in dataclass_fields(node)
+                ) if is_dataclass(node) else ()
+                for value in values:
+                    if isinstance(value, Type):
+                        visit_type(value)
+                    elif isinstance(value, tuple):
+                        for item in value:
+                            if isinstance(item, Type):
+                                visit_type(item)
+                            elif hasattr(item, "__dict__"):
+                                visit_node(item)
+                    elif hasattr(value, "__dict__"):
+                        visit_node(value)
+
+        for declaration in program.declarations:
+            visit_node(declaration)
+        return tuple(found.values())
+
+    def _is_generic_struct_type(self, type_: StructType) -> bool:
+        node = type_.symbol.node if type_.symbol is not None else None
+        return (
+            isinstance(node, ClassDeclaration)
+            and node.kind == "struct"
+            and bool(node.type_parameters)
+            and bool(type_.type_arguments)
+        )
+
+    def _emit_generic_struct_specialization(self, type_: StructType) -> str:
+        node = type_.symbol.node if type_.symbol is not None else None
+        if not isinstance(node, ClassDeclaration):
+            return ""
+        substitutions = {
+            parameter.name: argument
+            for parameter, argument in zip(node.type_parameters, type_.type_arguments)
+        }
+        fields = []
+        class_ = self._generic_ir_class(type_)
+        if class_ is not None:
+            for member in class_.members:
+                if not isinstance(member, IrVariable) or "static" in member.modifiers:
+                    continue
+                field_type = self._specialize_type_by_name(member.type, substitutions)
+                fields.append(
+                    IrVariable(
+                        member.location,
+                        member.symbol,
+                        member.name,
+                        field_type,
+                        member.mutable,
+                        None,
+                        member.modifiers,
+                        member.safety,
+                        member.field_ownership,
+                    )
+                )
+        else:
+            for member in node.members:
+                if not isinstance(member, VariableDeclaration) or member.type is None or "static" in member.modifiers:
+                    continue
+                field_type = self._type_from_generic_ast_reference(member.type, substitutions)
+                fields.append(
+                    IrVariable(
+                        member.location,
+                        type_.symbol,
+                        member.name,
+                        field_type,
+                        member.mutable,
+                        None,
+                        member.modifiers,
+                    )
+                )
+        return self._struct_definition(self._class_type_c_name(type_), fields)
+
+    def _type_from_generic_ast_reference(self, reference, substitutions: dict[str, Type]) -> Type:
+        if reference.name in substitutions:
+            base = substitutions[reference.name]
+        else:
+            base = {
+                "Bool": BOOL,
+                "bool": BOOL,
+                "Int": INT,
+                "int": INT,
+                "Double": DOUBLE,
+                "double": DOUBLE,
+                "String": STRING,
+                "string": STRING,
+                "Void": VOID,
+                "void": VOID,
+            }.get(reference.name, TypeParameterType(reference.name))
+        if reference.arguments and isinstance(base, (ClassType, StructType, InterfaceType)):
+            arguments = tuple(
+                self._type_from_generic_ast_reference(argument, substitutions)
+                for argument in reference.arguments
+            )
+            if isinstance(base, ClassType):
+                base = ClassType(base.name, base.symbol, arguments)
+            elif isinstance(base, StructType):
+                base = StructType(base.name, base.symbol, arguments)
+            else:
+                base = InterfaceType(base.name, base.symbol, arguments)
+        return self._apply_ast_type_modifiers(base, reference)
+
+    def _apply_ast_type_modifiers(self, base: Type, reference) -> Type:
+        result = base
+        for dimension in reference.array_dimensions:
+            size = dimension.value if dimension is not None and isinstance(dimension.value, int) else None
+            suffix = "[]" if size is None else f"[{size}]"
+            result = ArrayType(f"{result.name}{suffix}", result, size)
+        for _ in range(reference.array_depth - len(reference.array_dimensions)):
+            result = ArrayType(f"{result.name}[]", result)
+        if reference.nullable:
+            result = NullableType(f"{result.name}?", result)
+        return result
+
+    def _generic_ir_class(self, type_: StructType) -> IrClass | None:
+        target_symbol = type_.symbol
+        if target_symbol is None:
+            return None
+        for declaration in self.ownership.program.declarations:
+            if isinstance(declaration, IrClass) and declaration.symbol == target_symbol:
+                return declaration
+        return None
+
+    def _specialize_type_by_name(self, type_: Type, substitutions: dict[str, Type]) -> Type:
+        if isinstance(type_, TypeParameterType) and type_.name in substitutions:
+            return substitutions[type_.name]
+        if isinstance(type_, NullableType):
+            inner = self._specialize_type_by_name(type_.inner_type, substitutions)
+            if inner == type_.inner_type:
+                return type_
+            return NullableType(f"{inner.name}?", inner)
+        if isinstance(type_, ArrayType):
+            element = self._specialize_type_by_name(type_.element_type, substitutions)
+            if element == type_.element_type:
+                return type_
+            suffix = "[]" if type_.size is None else f"[{type_.size}]"
+            return ArrayType(f"{element.name}{suffix}", element, type_.size)
+        if isinstance(type_, (TaskType, TaskCollectionType)):
+            result = self._specialize_type_by_name(type_.result_type, substitutions)
+            if result == type_.result_type:
+                return type_
+            if isinstance(type_, TaskType):
+                return TaskType(f"Task<{result.display_name}>", result)
+            return TaskCollectionType(f"TaskCollection<{result.display_name}>", result)
+        if isinstance(type_, ClassType):
+            arguments = tuple(
+                self._specialize_type_by_name(argument, substitutions)
+                for argument in type_.type_arguments
+            )
+            if arguments == type_.type_arguments:
+                return type_
+            return ClassType(type_.name, type_.symbol, arguments)
+        if isinstance(type_, StructType):
+            arguments = tuple(
+                self._specialize_type_by_name(argument, substitutions)
+                for argument in type_.type_arguments
+            )
+            if arguments == type_.type_arguments:
+                return type_
+            return StructType(type_.name, type_.symbol, arguments)
+        if isinstance(type_, InterfaceType):
+            arguments = tuple(
+                self._specialize_type_by_name(argument, substitutions)
+                for argument in type_.type_arguments
+            )
+            if arguments == type_.type_arguments:
+                return type_
+            return InterfaceType(type_.name, type_.symbol, arguments)
+        return type_
 
     def _emit_class(self, class_: IrClass) -> str:
         if class_.name is None:
@@ -2976,11 +3223,12 @@ typedef struct {{
             f"{array_name} {temp} = {array_name}_new({len(expression.elements)});"
         )
         for element in expression.elements:
-            value = (
-                self._emit_owned_string_value(element, cleanup_result=False)
-                if expression.type.element_type == STRING
-                else self._emit_expression(element)
-            )
+            if isinstance(expression.type.element_type, InterfaceType):
+                value = self._emit_interface_value(element, expression.type.element_type)
+            elif expression.type.element_type == STRING:
+                value = self._emit_owned_string_value(element, cleanup_result=False)
+            else:
+                value = self._emit_expression(element)
             self._statement_prelude_stack[-1].append(
                 f"{array_name}_push(&{temp}, {value});"
             )
@@ -4211,7 +4459,15 @@ typedef struct {{
         return type_ if isinstance(type_, ClassType) else None
 
     def _class_type_c_name(self, type_: ClassType | StructType) -> str:
-        return self._class_c_name(type_.name, type_.symbol)
+        base = self._class_c_name(type_.name, type_.symbol)
+        type_arguments = getattr(type_, "type_arguments", ())
+        if not type_arguments:
+            return base
+        suffix = "_".join(
+            self._c_identifier(argument.display_name)
+            for argument in type_arguments
+        )
+        return f"{base}_{suffix}"
 
     def _enum_type_c_name(self, type_: EnumType) -> str:
         return self._class_c_name(type_.name, type_.symbol)

@@ -441,6 +441,12 @@ func load(): Void, !AccessDenied, ?AllocFailed {
         self.assertEqual(len(declaration.type.arguments), 1)
         self.assertEqual(declaration.type.arguments[0].name, "String")
 
+    def test_parses_generic_struct_declaration(self) -> None:
+        declaration = parse("struct Definition<T> {}").declarations[0]
+
+        self.assertIsInstance(declaration, ClassDeclaration)
+        self.assertEqual(declaration.type_parameters[0].name, "T")
+
     def test_parses_catch_expression_handlers(self) -> None:
         declaration = parse(
             """

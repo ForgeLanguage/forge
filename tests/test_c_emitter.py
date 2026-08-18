@@ -1159,6 +1159,35 @@ class User {
         self.assertIn("struct User* this = _forge_alloc(sizeof(struct User));", source)
         self.assertIn("void _forge_free_User(struct User* value)", source)
 
+    def test_emits_nullable_generic_struct_field_after_specialization(self) -> None:
+        source = emit_c(
+            parse(
+                """
+@multidef
+struct Definition<T> {
+    public asSingle: Bool
+    public instance: T?
+}
+
+class Logger {}
+
+struct Defs {
+    public logger: Definition<Logger>
+}
+
+const defs: Defs = {
+    logger: {
+        asSingle: true,
+        instance: Logger.new()
+    }
+}
+"""
+            )
+        )
+
+        self.assertIn("struct Definition_Logger {", source)
+        self.assertIn("struct Logger* instance;", source)
+
     def test_emits_instance_method_with_hidden_this_parameter(self) -> None:
         source = emit_c(
             parse(
