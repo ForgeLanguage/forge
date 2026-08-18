@@ -273,6 +273,51 @@ switch classify(len: Int): String {
         self.assertEqual(field.name, "args")
         self.assertEqual(field.modifiers, ("public",))
         self.assertEqual(field.type.array_depth, 1)
+        self.assertFalse(field.mutable)
+
+    def test_class_fields_default_const_and_allow_explicit_var(self) -> None:
+        class_declaration = parse(
+            "class App { count: Int\nvar status: Int\nconst name: String }"
+        ).declarations[0]
+
+        count, status, name = class_declaration.members
+
+        self.assertFalse(count.mutable)
+        self.assertIsNone(count.mutability_keyword)
+        self.assertTrue(status.mutable)
+        self.assertEqual(status.mutability_keyword, "var")
+        self.assertFalse(name.mutable)
+        self.assertEqual(name.mutability_keyword, "const")
+
+    def test_struct_fields_default_var_and_allow_explicit_const(self) -> None:
+        struct_declaration = parse(
+            "struct Point { x: Int\ny: Int\nconst length: Int }"
+        ).declarations[0]
+
+        x, y, length = struct_declaration.members
+
+        self.assertTrue(x.mutable)
+        self.assertTrue(y.mutable)
+        self.assertFalse(length.mutable)
+        self.assertEqual(length.mutability_keyword, "const")
+
+    def test_folded_struct_fields_default_var(self) -> None:
+        struct_declaration = parse(
+            """
+public struct
+
+public x: Int
+public const y: Int
+""",
+            source_name="Point.forge",
+        ).declarations[0]
+
+        x, y = struct_declaration.members
+
+        self.assertTrue(x.mutable)
+        self.assertIsNone(x.mutability_keyword)
+        self.assertFalse(y.mutable)
+        self.assertEqual(y.mutability_keyword, "const")
 
     def test_parses_not_in_expression(self) -> None:
         statement = parse('"x" not in text').declarations[0]
@@ -642,7 +687,7 @@ const repeated = do {
         self.assertEqual(do_value.initializer.fallback.value, 3)
 
 
-    def test_parses_const_and_let_array_destructuring(self) -> None:
+    def test_parses_const_and_var_array_destructuring(self) -> None:
         program = parse(
             """
 main(values: Int[]): Void {

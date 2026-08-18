@@ -1300,6 +1300,18 @@ class _TypeChecker:
             if isinstance(symbol, Symbol) and symbol.kind in {"variable", "parameter"}:
                 if not symbol.mutable:
                     self._error(f"Cannot assign to immutable '{symbol.name}'", expression.target)
+        elif isinstance(expression.target, MemberExpression):
+            member_symbol = self._selected_symbols.get(id(expression.target))
+            if (
+                isinstance(member_symbol, Symbol)
+                and isinstance(member_symbol.node, VariableDeclaration)
+                and not member_symbol.node.mutable
+                and not self._is_constructor_field_initialization(expression.target)
+            ):
+                self._error(
+                    f"Cannot assign to immutable field '{member_symbol.name}'",
+                    expression.target,
+                )
         if expression.operator is not TokenKind.EQUAL:
             result = self._binary_operator_type(
                 expression.operator,
@@ -1311,6 +1323,15 @@ class _TypeChecker:
             return target
         self._check_assignable(value, target, expression.value)
         return target
+
+    def _is_constructor_field_initialization(self, target: MemberExpression) -> bool:
+        if (
+            not self._function_stack
+            or self._function_stack[-1].kind != "new"
+            or not self._class_stack
+        ):
+            return False
+        return isinstance(target.receiver, ThisExpression)
 
     def _conditional_type(self, expression: ConditionalExpression) -> Type:
         condition = self._visit_expression(expression.condition)

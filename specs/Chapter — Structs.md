@@ -23,6 +23,16 @@ public struct HttpResponse {
 ```
 
 Struct fields use the same visibility modifiers as other type members.
+Unlike class fields, struct fields are mutable by default: `public status: Int`
+means `public var status: Int`. Use `const` for a struct field that must not be
+reassigned after initialization.
+
+```forge
+public struct HttpResponse {
+    public status: Int
+    public const protocol: String
+}
+```
 
 ## Struct literals
 

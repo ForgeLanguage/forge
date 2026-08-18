@@ -773,7 +773,7 @@ stringify(value: Int, enabled: Bool, label: String): String {
         program = parse(
             """
 class User {
-    public name: String
+    public var name: String
     rename(name: String): Void {
         this.name = name
     }
@@ -1169,6 +1169,68 @@ value = 2
 
         self.assertEqual(result.diagnostics[0].message, "Cannot assign to immutable 'value'")
 
+    def test_class_fields_default_const_after_constructor(self) -> None:
+        program = parse(
+            """
+class User {
+    name: String
+
+    new(name: String): User {
+        this.name = name
+    }
+
+    rename(name: String): Void {
+        this.name = name
+    }
+}
+"""
+        )
+
+        result = check_types(program, raise_on_error=False)
+
+        self.assertEqual(
+            result.diagnostics[0].message,
+            "Cannot assign to immutable field 'name'",
+        )
+
+    def test_var_class_field_can_be_reassigned(self) -> None:
+        program = parse(
+            """
+class Counter {
+    var value: Int
+
+    new(): Counter {
+        this.value = 0
+    }
+
+    bump(): Void {
+        this.value = this.value + 1
+    }
+}
+"""
+        )
+
+        result = check_types(program, raise_on_error=False)
+
+        self.assertEqual(result.diagnostics, ())
+
+    def test_struct_fields_default_var_for_assignment(self) -> None:
+        program = parse(
+            """
+struct Point {
+    x: Int
+}
+
+update(point: Point): Void {
+    point.x = 1
+}
+"""
+        )
+
+        result = check_types(program, raise_on_error=False)
+
+        self.assertEqual(result.diagnostics, ())
+
     def test_lazy_parameter_requires_lazy_variable_argument(self) -> None:
         program = parse(
             """
@@ -1232,7 +1294,7 @@ const user: User? = null
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public var profile: Profile?
     public setProfile(take profile: Profile): Void {
         this.profile = profile
     }

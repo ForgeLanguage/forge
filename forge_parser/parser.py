@@ -124,6 +124,7 @@ class Parser:
         self._current = 0
         self.source_name = source_name
         self._attributes: tuple[str, ...] = ()
+        self._type_body_stack: list[str] = []
 
     def parse(self) -> Program:
         declarations: list[Declaration | Statement] = []
@@ -206,6 +207,18 @@ class Parser:
                 ownership or "take",
             )
         if self._match(TokenKind.CONST, TokenKind.VAR, TokenKind.LAZY):
+            if self._type_body_stack and self._previous().kind is not TokenKind.LAZY:
+                return self._field_declaration(
+                    modifiers,
+                    ownership,
+                    mutability_keyword=self._previous().lexeme,
+                )
+            if ownership is not None and self._previous().kind is not TokenKind.LAZY:
+                return self._field_declaration(
+                    modifiers,
+                    ownership,
+                    mutability_keyword=self._previous().lexeme,
+                )
             if ownership is not None:
                 raise ParserError(
                     "Local declaration cannot have ownership modifier",
@@ -217,6 +230,10 @@ class Parser:
         if modifiers or ownership is not None:
             token = self._peek()
             raise ParserError("Expected declaration after modifier", token.location)
+        if self._type_body_stack and self._check(TokenKind.IDENTIFIER):
+            next_token = self.tokens[self._current + 1] if self._current + 1 < len(self.tokens) else None
+            if next_token is not None and next_token.kind in {TokenKind.COLON, TokenKind.EQUAL}:
+                return self._field_declaration(modifiers, ownership)
 
         return self._statement()
 
@@ -233,13 +250,17 @@ class Parser:
 
         if self._match(TokenKind.LEFT_BRACE):
             braced_body = True
-            while not self._check(TokenKind.RIGHT_BRACE) and not self._check(TokenKind.EOF):
-                if self._match(TokenKind.IMPLEMENTS):
-                    implements.extend(self._implements_list())
-                elif self._match(TokenKind.USES):
-                    uses.extend(self._uses_list())
-                else:
-                    members.append(self._declaration())
+            self._type_body_stack.append(keyword.lexeme)
+            try:
+                while not self._check(TokenKind.RIGHT_BRACE) and not self._check(TokenKind.EOF):
+                    if self._match(TokenKind.IMPLEMENTS):
+                        implements.extend(self._implements_list())
+                    elif self._match(TokenKind.USES):
+                        uses.extend(self._uses_list())
+                    else:
+                        members.append(self._declaration())
+            finally:
+                self._type_body_stack.pop()
             self._consume(TokenKind.RIGHT_BRACE, "Expected '}' after class body")
 
         return ClassDeclaration(
@@ -307,10 +328,22 @@ class Parser:
         keyword = self._previous()
         fields: list[VariableDeclaration] = []
         self._consume(TokenKind.LEFT_BRACE, "Expected '{' after inline struct")
-        while not self._check(TokenKind.RIGHT_BRACE) and not self._check(TokenKind.EOF):
-            modifiers = self._modifiers()
-            fields.append(self._field_declaration(modifiers))
-            self._match(TokenKind.COMMA, TokenKind.SEMICOLON)
+        self._type_body_stack.append("struct")
+        try:
+            while not self._check(TokenKind.RIGHT_BRACE) and not self._check(TokenKind.EOF):
+                modifiers = self._modifiers()
+                mutability_keyword = None
+                if self._match(TokenKind.CONST, TokenKind.VAR):
+                    mutability_keyword = self._previous().lexeme
+                fields.append(
+                    self._field_declaration(
+                        modifiers,
+                        mutability_keyword=mutability_keyword,
+                    )
+                )
+                self._match(TokenKind.COMMA, TokenKind.SEMICOLON)
+        finally:
+            self._type_body_stack.pop()
         self._consume(TokenKind.RIGHT_BRACE, "Expected '}' after inline struct")
         return InlineStructType(keyword.location, tuple(fields))
 
@@ -359,6 +392,13 @@ class Parser:
             elif isinstance(declaration, UsesDeclaration):
                 uses.extend(declaration.traits)
             else:
+                if (
+                    isinstance(class_declaration, ClassDeclaration)
+                    and class_declaration.kind == "struct"
+                    and isinstance(declaration, VariableDeclaration)
+                    and declaration.mutability_keyword is None
+                ):
+                    declaration = replace(declaration, mutable=True)
                 members.append(declaration)
         suffix = tuple(
             declaration
@@ -705,6 +745,7 @@ class Parser:
             modifiers,
             None,
             keyword.kind is TokenKind.LAZY,
+            keyword.lexeme if keyword.kind in {TokenKind.CONST, TokenKind.VAR} else None,
         )
 
     def _array_destructuring_declaration(
@@ -757,6 +798,8 @@ class Parser:
         self,
         modifiers: tuple[str, ...],
         ownership: str | None = None,
+        *,
+        mutability_keyword: str | None = None,
     ) -> VariableDeclaration:
         name = self._consume_identifier("Expected field name")
         declared_type = None
@@ -773,15 +816,20 @@ class Parser:
             )
 
         self._match(TokenKind.SEMICOLON)
+        if mutability_keyword is not None:
+            mutable = mutability_keyword == "var"
+        else:
+            mutable = bool(self._type_body_stack and self._type_body_stack[-1] == "struct")
         return VariableDeclaration(
             name.location,
             name.lexeme,
             initializer,
-            False,
+            mutable,
             declared_type,
             modifiers,
             ownership,
             False,
+            mutability_keyword if mutability_keyword in {"const", "var"} else None,
         )
 
     def _type_reference(self) -> TypeReference:

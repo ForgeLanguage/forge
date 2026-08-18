@@ -178,7 +178,7 @@ main(): Void {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public setProfile(take profile: Profile): Void {
         this.profile = profile
         const copy: Profile = profile
@@ -198,7 +198,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
 }
 
 main(): Void {
@@ -222,7 +222,7 @@ main(): Void {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
 }
 
 main(): Void {
@@ -304,7 +304,7 @@ set(first: Profile): Void {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile
+    public take profile: Profile
     public new() {}
 }
 """
@@ -323,7 +323,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile
+    public take profile: Profile
 }
 """
         )
@@ -341,7 +341,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile
+    public take profile: Profile
     public new(take profile: Profile) {
         this.profile = profile
     }
@@ -359,7 +359,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take profile: Profile?
 }
 """
         )
@@ -374,7 +374,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public setProfile(profile: Profile): Void {
         this.profile = profile
     }
@@ -386,7 +386,7 @@ class User {
 
         self.assertEqual(
             result.diagnostics[0].message,
-            "Cannot assign borrowed resource 'profile' to owned field",
+            "Cannot assign borrowed resource to a take field",
         )
 
     def test_owned_return_consumes_take_parameter(self) -> None:

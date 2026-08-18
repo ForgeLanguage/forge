@@ -132,6 +132,7 @@ class VariableDeclaration(Declaration):
     modifiers: tuple[str, ...] = ()
     field_ownership: Literal["borrow", "take"] | None = None
     lazy: bool = False
+    mutability_keyword: Literal["const", "var"] | None = None
 
 
 @dataclass(frozen=True, slots=True)

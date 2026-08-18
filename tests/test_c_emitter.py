@@ -1212,7 +1212,7 @@ const defs: Defs = {
             parse(
                 """
 class Counter {
-    public value: Int
+    public var value: Int
     inc(): Void {
         this.value = this.value + 1
     }
@@ -1317,7 +1317,7 @@ main(): Void {
             parse(
                 """
 class Counter {
-    public value: Int
+    public var value: Int
     inc(): Void {
         this.value = this.value + 1
     }
@@ -1445,7 +1445,7 @@ class Profile {
     public firstName: String
 }
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public name(): String {
         return this.profile ? this.profile.firstName + "!" : ""
     }
@@ -1467,7 +1467,7 @@ class Profile {
     public firstName: String
 }
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public name(): String? {
         return this.profile?.firstName
     }
@@ -1490,7 +1490,7 @@ struct Profile {
     public firstName: String
 }
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public name(): String {
         return this.profile ? this.profile.firstName : ""
     }
@@ -1512,7 +1512,7 @@ struct Profile {
     public firstName: String
 }
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public render(profile: Profile): String {
         return profile.firstName
     }
@@ -1533,7 +1533,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public setProfile(take profile: Profile): Void {
         this.profile = profile
     }
@@ -1567,7 +1567,7 @@ consume(take profile: Profile): Void {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public setProfile(take profile: Profile): Void {
         this.profile = profile
     }
@@ -1601,7 +1601,7 @@ identity(take profile: Profile): Profile {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
     public clear(): Void {
         this.profile = null
     }
@@ -1622,7 +1622,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take var profile: Profile?
 }
 
 main(): Void {
@@ -1683,7 +1683,7 @@ main(): Void {
             parse(
                 """
 class User {
-    public age: Int
+    public var age: Int
     save(): Void {}
 }
 
@@ -1781,7 +1781,7 @@ class Point {
             parse(
                 """
 class Counter {
-    public static count: Int = 0
+    public static var count: Int = 0
     public value: Int
     public new() {
         self.count = self.count + 1
@@ -2025,7 +2025,7 @@ class User {
 @multidef
 class Profile {}
 class User {
-    public profile: Profile?
+    public take profile: Profile?
 }
 """
             )
@@ -2418,7 +2418,7 @@ use Profile
 
 class
 
-public profile: Profile?
+public take var profile: Profile?
 public setProfile(take profile: Profile): Void {
     this.profile = profile
 }
