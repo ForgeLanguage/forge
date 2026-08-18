@@ -395,7 +395,8 @@ def default_binary_output(source: Path) -> Path:
 
 
 def source_basename(source: Path) -> str:
-    return source.name.rsplit(".", 1)[0]
+    name = source.name or source.resolve().name
+    return name.rsplit(".", 1)[0]
 
 
 if __name__ == "__main__":

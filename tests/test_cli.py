@@ -56,6 +56,19 @@ class ForgeCliTests(unittest.TestCase):
             with self.assertRaises(forge_cli.ForgeCliError):
                 forge_cli.compiler()
 
+    def test_directory_project_defaults_use_directory_name_for_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(forge_cli, "BUILD_DIR", Path(".forge-build")):
+                self.assertEqual(
+                    forge_cli.default_c_output_dir(root / "."),
+                    Path(".forge-build") / f"{root.name}-c",
+                )
+                self.assertEqual(
+                    forge_cli.default_binary_output(root / "."),
+                    Path(".forge-build") / root.name,
+                )
+
     def test_main_reports_missing_executable_without_traceback(self) -> None:
         with patch.object(forge_cli, "command_run", side_effect=FileNotFoundError(2, "No such file", "missing.exe")):
             with patch("sys.stderr") as stderr:
