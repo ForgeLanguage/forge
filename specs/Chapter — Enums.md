@@ -98,7 +98,7 @@ public enum HttpStatus : struct {
     Ok => { 200, "OK", false }
     NotFound => { 404, "Not Found", true }
 
-    public func isClientError(): Bool => this.code >= 400 && this.code < 500
+    public isClientError(): Bool => this.code >= 400 && this.code < 500
 }
 ```
 
@@ -118,7 +118,7 @@ public enum HttpStatus : struct {
     Ok => { 200, "OK", false }
     NotFound => { 404, "Not Found", true }
 
-    public func isClientError(): Bool => this.code >= 400 && this.code < 500
+    public isClientError(): Bool => this.code >= 400 && this.code < 500
 }
 ```
 

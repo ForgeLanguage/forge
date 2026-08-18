@@ -11,14 +11,14 @@
 
 ```forge
 const name = "Forge"
-let count = 10
+var count = 10
 ```
 
 Эквивалентно:
 
 ```forge
 const name: String = "Forge"
-let count: Int = 10
+var count: Int = 10
 ```
 
 ---
@@ -117,7 +117,7 @@ public name: String = "Forge"
 ## Функции
 
 ```forge
-public func add(a: Int, b: Int): Int {
+public add(a: Int, b: Int): Int {
     return a + b
 }
 ```
@@ -142,7 +142,7 @@ Forge не делает полный вывод типов, потому что 
 # 7. Итог
 
 - `const x = expr` — допустимо
-- `let x = expr` — допустимо
+- `var x = expr` — допустимо
 - тип выводится из выражения
 - если тип неочевиден — он обязателен
 - сигнатуры и поля всегда явные

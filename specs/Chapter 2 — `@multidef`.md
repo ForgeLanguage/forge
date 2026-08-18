@@ -18,7 +18,7 @@
 
 class HelloWorld
 {
-    public static func main(args: String[]): Void
+    public static main(args: String[]): Void
     {
         print "Hello, World!"
     }
@@ -37,7 +37,7 @@ class HelloWorld
 @multidef
 
 trait Greeter {
-    public func greet(): Void {
+    public greet(): Void {
         print "Hello"
     }
 }
@@ -45,7 +45,7 @@ trait Greeter {
 class App
 uses Greeter
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: App = App.new()
     app.greet()
 }

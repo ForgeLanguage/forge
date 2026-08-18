@@ -24,7 +24,7 @@ from forge_typecheck import INT, STRING
 
 class LoweringTests(unittest.TestCase):
     def test_lowers_short_function_body_to_block_return(self) -> None:
-        program = parse("func answer(): Int => 42")
+        program = parse("answer(): Int => 42")
 
         result = lower(program)
         function = result.ir.declarations[0]
@@ -66,7 +66,7 @@ const copy = answer + 2
             """
 class User {
     public name: String
-    func getName(): String => this.name
+    getName(): String => this.name
 }
 """
         )
@@ -84,7 +84,7 @@ class User {
     def test_lowers_call_with_typed_callee_and_arguments(self) -> None:
         program = parse(
             """
-func add(left: Int, right: Int): Int => left + right
+add(left: Int, right: Int): Int => left + right
 const result = add(1, 2)
 """
         )
@@ -112,8 +112,8 @@ const result = add(1, 2)
         program = parse(
             """
 class File {}
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
     const borrowed: File = file
 }
 """
@@ -142,7 +142,7 @@ func main(): Void {
     def test_lowers_task_bulk_call(self) -> None:
         program = parse(
             """
-async func download(url: String): String => url
+async download(url: String): String => url
 const urls = ["a", "b"]
 const pending = download task[urls]
 """
@@ -156,7 +156,7 @@ const pending = download task[urls]
     def test_lowers_array_bulk_map_call(self) -> None:
         program = parse(
             """
-func twice(value: Int): Int => value * 2
+twice(value: Int): Int => value * 2
 const values = [1, 2]
 const doubled = twice[values]
 """
@@ -173,7 +173,7 @@ const doubled = twice[values]
         result = lower(
             parse(
                 """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first, second] = catch values {
         issue: PatternMismatch => { return }
     }
@@ -204,8 +204,8 @@ func main(values: Int[]): Void {
         result = lower(
             parse(
                 """
-func values(): Int[] => [1, 2]
-func main(): Void {
+values(): Int[] => [1, 2]
+main(): Void {
     const [first, second] = catch values() {
         issue: PatternMismatch => { return }
     }

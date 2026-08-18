@@ -1,6 +1,6 @@
 use Console
 
-public static func main(): Int
+public static main(): Int
 {
     const urls = ["https://example.com", "https://google.com"]
     Console.write[processUrl task[urls].concurrency(10).all().await()]
@@ -8,6 +8,6 @@ public static func main(): Int
     return 0
 }
 
-public static async func processUrl(url: String): String {
+public static async processUrl(url: String): String {
     return url
 }

@@ -5,12 +5,12 @@ use std.Net.NetworkIssue
 
 class
 
-public static async func status(url: String): Int, !HttpIssue {
+public static async status(url: String): Int, !HttpIssue {
     const response = forward await Http.get(url)
     return response.status
 }
 
-public static async func get(url: String): HttpResponse, !HttpIssue {
+public static async get(url: String): HttpResponse, !HttpIssue {
     const schemeEnd = url.indexOf("http://")
     if schemeEnd != 0 {
         return HttpIssue.new("only http:// URLs are supported")
@@ -25,7 +25,7 @@ public static async func get(url: String): HttpResponse, !HttpIssue {
     const colon = hostPort.indexOf(":")
     const hostEnd = colon >= 0 ? colon : hostPort.length()
     const host = hostPort.substring(0, hostEnd)
-    let port = 80
+    var port = 80
     if colon >= 0 {
         port = hostPort.substring(colon + 1, hostPort.length()).parseInt()
     }
@@ -47,8 +47,8 @@ public static async func get(url: String): HttpResponse, !HttpIssue {
         }
     }
 
-    let raw = ""
-    let done = false
+    var raw = ""
+    var done = false
     while not done {
         const chunk = catch await Network.read(stream, 4096) {
             issue: NetworkIssue => {
@@ -67,7 +67,7 @@ public static async func get(url: String): HttpResponse, !HttpIssue {
     const statusText = raw.substring(9, 12)
     const status = statusText.parseInt()
     const separator = raw.indexOf("\r\n\r\n")
-    let body = ""
+    var body = ""
     if separator >= 0 {
         body = raw.substring(separator + 4, raw.length())
     }

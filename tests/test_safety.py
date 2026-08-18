@@ -10,11 +10,11 @@ class SafetyCheckTests(unittest.TestCase):
         program = parse(
             """
 class File {
-    exclusive terminate func dispose(): Void {}
+    exclusive terminate dispose(): Void {}
 }
 
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
     file.dispose()
 }
 """
@@ -31,11 +31,11 @@ func main(): Void {
         program = parse(
             """
 class File {
-    exclusive terminate func dispose(): Void {}
+    exclusive terminate dispose(): Void {}
 }
 
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
     file.dispose()
     file.dispose()
 }
@@ -52,11 +52,11 @@ func main(): Void {
         program = parse(
             """
 class File {
-    exclusive terminate func dispose(): Void {}
+    exclusive terminate dispose(): Void {}
 }
 
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
     const borrowed: File = file
     file.dispose()
     borrowed.dispose()
@@ -76,11 +76,11 @@ func main(): Void {
         program = parse(
             """
 class File {
-    exclusive func flush(): Void {}
+    exclusive flush(): Void {}
 }
 
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
     const borrowed: File = file
     borrowed.flush()
 }
@@ -98,10 +98,10 @@ func main(): Void {
         program = parse(
             """
 class Profile {}
-func consume(take profile: Profile): Void {}
+consume(take profile: Profile): Void {}
 
-func main(): Void {
-    let profile: Profile
+main(): Void {
+    var profile: Profile
     consume(move profile)
     const copy: Profile = profile
 }
@@ -117,9 +117,9 @@ func main(): Void {
         program = parse(
             """
 class Profile {}
-func consume(take profile: Profile): Void {}
+consume(take profile: Profile): Void {}
 
-func passOn(profile: Profile): Void {
+passOn(profile: Profile): Void {
     consume(move profile)
 }
 """
@@ -143,7 +143,7 @@ class User {
         this.profile = move profile
     }
 }
-func makeProfile(): Profile => Profile.new()
+makeProfile(): Profile => Profile.new()
 const user = User.new(move makeProfile())
 """
         )
@@ -156,10 +156,10 @@ const user = User.new(move makeProfile())
         program = parse(
             """
 class Profile {}
-borrow func borrowed(profile: Profile): Profile => profile
-func consume(take profile: Profile): Void {}
-func main(): Void {
-    let profile: Profile
+borrow borrowed(profile: Profile): Profile => profile
+consume(take profile: Profile): Void {}
+main(): Void {
+    var profile: Profile
     consume(move borrowed(profile))
 }
 """
@@ -179,7 +179,7 @@ func main(): Void {
 class Profile {}
 class User {
     public profile: Profile?
-    public func setProfile(take profile: Profile): Void {
+    public setProfile(take profile: Profile): Void {
         this.profile = profile
         const copy: Profile = profile
     }
@@ -201,9 +201,9 @@ class User {
     public profile: Profile?
 }
 
-func main(): Void {
-    let user: User
-    let profile: Profile
+main(): Void {
+    var user: User
+    var profile: Profile
     user.profile = profile
 }
 """
@@ -225,9 +225,9 @@ class User {
     public profile: Profile?
 }
 
-func main(): Void {
-    let user: User
-    let profile: Profile
+main(): Void {
+    var user: User
+    var profile: Profile
     user.profile = move profile
 }
 """
@@ -245,9 +245,9 @@ func main(): Void {
         program = parse(
             """
 class Profile {}
-func main(): Void {
-    let first: Profile
-    let second: Profile
+main(): Void {
+    var first: Profile
+    var second: Profile
     first = second
 }
 """
@@ -264,9 +264,9 @@ func main(): Void {
         program = parse(
             """
 class Profile {}
-func main(): Void {
-    let first: Profile
-    let second: Profile
+main(): Void {
+    var first: Profile
+    var second: Profile
     first = move second
 }
 """
@@ -284,8 +284,8 @@ func main(): Void {
         program = parse(
             """
 class Profile {}
-func set(first: Profile): Void {
-    let second: Profile
+set(first: Profile): Void {
+    var second: Profile
     second = first
 }
 """
@@ -375,7 +375,7 @@ class User {
 class Profile {}
 class User {
     public profile: Profile?
-    public func setProfile(profile: Profile): Void {
+    public setProfile(profile: Profile): Void {
         this.profile = profile
     }
 }
@@ -393,7 +393,7 @@ class User {
         program = parse(
             """
 class Profile {}
-func identity(take profile: Profile): Profile {
+identity(take profile: Profile): Profile {
     return profile
 }
 """
@@ -411,8 +411,8 @@ func identity(take profile: Profile): Profile {
         program = parse(
             """
 class Profile {}
-func makeProfile(): Profile {
-    let profile: Profile
+makeProfile(): Profile {
+    var profile: Profile
     return profile
 }
 """
@@ -429,8 +429,8 @@ func makeProfile(): Profile {
         program = parse(
             """
 class Profile {}
-func makeProfile(): Profile {
-    let profile: Profile
+makeProfile(): Profile {
+    var profile: Profile
     return move profile
 }
 """
@@ -455,9 +455,9 @@ class User {
     public profile: Profile?
 }
 
-func update(flag: Bool): Void {
-    let user: User
-    let profile: Profile
+update(flag: Bool): Void {
+    var user: User
+    var profile: Profile
     if flag {
         user.profile = move profile
     }
@@ -478,8 +478,8 @@ class Profile {
     public name: String
 }
 
-func choose(flag: Bool): Profile {
-    let profile: Profile
+choose(flag: Bool): Profile {
+    var profile: Profile
     if flag {
         return move profile
     }
@@ -499,7 +499,7 @@ func choose(flag: Bool): Profile {
         program = parse(
             """
 class Profile {}
-func identity(profile: Profile): Profile {
+identity(profile: Profile): Profile {
     return profile
 }
 """
@@ -516,11 +516,11 @@ func identity(profile: Profile): Profile {
         program = parse(
             """
 class File {
-    func name(): String => "log.txt"
+    name(): String => "log.txt"
 }
 
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
     const borrowed: File = file
     borrowed.name()
 }
@@ -535,8 +535,8 @@ func main(): Void {
         program = parse(
             """
 class File {
-    exclusive terminate func close(): Void {}
-    exclusive terminate func dispose(): Void {}
+    exclusive terminate close(): Void {}
+    exclusive terminate dispose(): Void {}
 }
 """
         )
@@ -553,8 +553,8 @@ class File {
         program = parse(
             """
 class File {}
-func main(): Void {
-    let file: File
+main(): Void {
+    var file: File
 }
 """
         )
@@ -570,7 +570,7 @@ func main(): Void {
                 """
 class File {}
 
-func pick(file: File): File? {
+pick(file: File): File? {
     return while true {
         break file
     }
@@ -591,7 +591,7 @@ func pick(file: File): File? {
                 """
 class File {}
 
-func pick(take file: File): File? {
+pick(take file: File): File? {
     return while true {
         break file
     }
@@ -608,7 +608,7 @@ func pick(take file: File): File? {
                 """
 class File {}
 
-func pick(file: File): File? {
+pick(file: File): File? {
     return while false {
         break null
     } else file
@@ -629,7 +629,7 @@ func pick(file: File): File? {
                 """
 class File {}
 
-func pick(flag: Bool, take first: File, take second: File): File? {
+pick(flag: Bool, take first: File, take second: File): File? {
     return while false {
         break null
     } else (flag ? first : second)
@@ -649,7 +649,7 @@ class Holder {
     public new(public file: File) {}
 }
 
-func pick(holder: Holder): File? {
+pick(holder: Holder): File? {
     return while false {
         break null
     } else holder.file
@@ -669,7 +669,7 @@ func pick(holder: Holder): File? {
         program = parse(
             """
 class File {}
-func main(files: File[]): Void {
+main(files: File[]): Void {
     const [first] = catch files {
         issue: PatternMismatch => { return }
     }

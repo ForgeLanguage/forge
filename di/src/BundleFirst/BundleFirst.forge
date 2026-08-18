@@ -10,7 +10,7 @@ struct Defs
 
 class BundleFirst
 {
-    public static func defs(): Defs
+    public static defs(): Defs
     {
         return {
             logger: {

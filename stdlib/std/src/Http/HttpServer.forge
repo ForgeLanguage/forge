@@ -7,7 +7,7 @@ use std.Net.TcpStream
 
 class
 
-public static async func serve(port: Int, handler: HttpServerHandler): Void, !HttpIssue {
+public static async serve(port: Int, handler: HttpServerHandler): Void, !HttpIssue {
     const listener = catch Network.listenTcp(port) {
         issue: NetworkIssue => {
             return HttpIssue.new(issue.message)
@@ -26,13 +26,13 @@ public static async func serve(port: Int, handler: HttpServerHandler): Void, !Ht
     }
 }
 
-private static async func serveConnection(
+private static async serveConnection(
     take stream: TcpStream,
     handler: HttpServerHandler
 ): Bool {
-    let raw = ""
-    let headerEnd: Int = -1
-    let bodyLength = 0
+    var raw = ""
+    var headerEnd: Int = -1
+    var bodyLength = 0
 
     const request: String? = while true {
         const chunk = catch await Network.read(stream, 4096) {

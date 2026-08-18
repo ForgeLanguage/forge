@@ -48,7 +48,7 @@ class ParserTests(unittest.TestCase):
             '''
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     print "Hello, World!"
 }
@@ -75,7 +75,7 @@ public static func main(args: String[]): Void
         self.assertEqual(statement.expression.value, "Hello, World!")
 
     def test_parses_fixed_size_array_type(self) -> None:
-        declaration = parse("let values: Int[2 + 3]").declarations[0]
+        declaration = parse("var values: Int[2 + 3]").declarations[0]
 
         self.assertIsInstance(declaration, VariableDeclaration)
         self.assertEqual(declaration.type.name, "Int")
@@ -86,7 +86,7 @@ public static func main(args: String[]): Void
         program = parse(
             """
 const name = "Forge"
-let counter: Int = 0
+var counter: Int = 0
 lazy delayed: Int = 1
 """
         )
@@ -108,14 +108,14 @@ lazy delayed: Int = 1
         self.assertEqual(delayed.type.name, "Int")
 
     def test_parses_lazy_parameter(self) -> None:
-        function = parse("func consume(lazy value: Int): Int => value").declarations[0]
+        function = parse("consume(lazy value: Int): Int => value").declarations[0]
 
         self.assertIsInstance(function, FunctionDeclaration)
         self.assertTrue(function.parameters[0].lazy)
         self.assertEqual(function.parameters[0].name, "value")
 
     def test_parses_template_function_type_parameter(self) -> None:
-        function = parse("public template func parse<T:struct>(): T").declarations[0]
+        function = parse("public template parse<T:struct>(): T").declarations[0]
 
         self.assertIsInstance(function, FunctionDeclaration)
         self.assertEqual(function.modifiers, ("public", "template"))
@@ -167,14 +167,21 @@ lazy delayed: Int = 1
         self.assertEqual(prefix.value.value, 1)
 
     def test_parses_short_function_body(self) -> None:
-        function = parse("public static func square(x: Int): Int => x * x").declarations[0]
+        function = parse("public static square(x: Int): Int => x * x").declarations[0]
 
         self.assertIsInstance(function, FunctionDeclaration)
         self.assertIsInstance(function.body, BinaryExpression)
 
+    def test_rejects_func_keyword_in_function_declaration(self) -> None:
+        with self.assertRaisesRegex(ParserError, "'func' is not allowed"):
+            parse("func answer(): Int => 42")
+
+        with self.assertRaisesRegex(ParserError, "'func' is not allowed"):
+            parse("class App { public func run(): Void {} }")
+
     def test_parses_native_function_binding(self) -> None:
         function = parse(
-            'public static native func answer(): Int = "native_answer"'
+            'public static native answer(): Int = "native_answer"'
         ).declarations[0]
 
         self.assertIsInstance(function, FunctionDeclaration)
@@ -183,7 +190,7 @@ lazy delayed: Int = 1
         self.assertIsNone(function.body)
 
     def test_parses_return_statement(self) -> None:
-        function = parse("func answer(): Int { return 42 }").declarations[0]
+        function = parse("answer(): Int { return 42 }").declarations[0]
 
         self.assertIsInstance(function.body.statements[0], ReturnStatement)
         expression = function.body.statements[0].expression
@@ -309,7 +316,7 @@ switch classify(len: Int): String {
             """
 @multidef
 interface Stringable {
-    public func toString(): String
+    public toString(): String
 }
 
 class User {
@@ -330,7 +337,7 @@ class User {
             """
 @multidef
 trait RunnableLogic {
-    public func run(): Void {}
+    public run(): Void {}
 }
 
 class App {
@@ -346,7 +353,7 @@ class App {
     def test_parses_take_parameters_and_move_arguments(self) -> None:
         program = parse(
             """
-func setProfile(take profile: Profile): Void {}
+setProfile(take profile: Profile): Void {}
 setProfile(move profile)
 """
         )
@@ -427,7 +434,7 @@ user.{
     def test_parses_prefixed_function_outcomes_and_forward(self) -> None:
         function = parse(
             """
-func load(): Void, !AccessDenied, ?AllocFailed {
+load(): Void, !AccessDenied, ?AllocFailed {
     forward reserve()
 }
 """
@@ -507,7 +514,7 @@ while !window.shouldClose() {
 
     def test_rejects_multiple_success_types_in_function_signature(self) -> None:
         with self.assertRaises(ParserError) as raised:
-            parse("func bad(): Int, String {}")
+            parse("bad(): Int, String {}")
 
         self.assertEqual(
             raised.exception.message,
@@ -556,7 +563,7 @@ public struct
 public status: Int
 public body: String
 
-public func isClientError(): Bool => this.status >= 400 && this.status < 500
+public isClientError(): Bool => this.status >= 400 && this.status < 500
 """,
             source_name="HttpResponse.forge",
         ).declarations[0]
@@ -569,7 +576,7 @@ public func isClientError(): Bool => this.status >= 400 && this.status < 500
     def test_parses_struct_literal_initializer(self) -> None:
         declaration = parse(
             """
-let response: HttpResponse = {
+var response: HttpResponse = {
     status: 200,
     body: "OK"
 }
@@ -598,7 +605,7 @@ public enum HttpStatus : struct {
     Ok => { 200, "OK", false }
     NotFound => { 404, "Not Found", true }
 
-    public func isClientError(): Bool => this.code >= 400 && this.code < 500
+    public isClientError(): Bool => this.code >= 400 && this.code < 500
 }
 """
         ).declarations
@@ -638,9 +645,9 @@ const repeated = do {
     def test_parses_const_and_let_array_destructuring(self) -> None:
         program = parse(
             """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first, second] = values
-    let [left, right] = values
+    var [left, right] = values
 }
 """
         )
@@ -662,13 +669,13 @@ func main(values: Int[]): Void {
             ParserError,
             "Array destructuring requires at least one binding",
         ):
-            parse("func main(values: Int[]): Void { const [] = values }")
+            parse("main(values: Int[]): Void { const [] = values }")
 
         with self.assertRaisesRegex(
             ParserError,
             "Expected binding name after ',' in array destructuring",
         ):
-            parse("func main(values: Int[]): Void { const [first,] = values }")
+            parse("main(values: Int[]): Void { const [first,] = values }")
 
 
 if __name__ == "__main__":

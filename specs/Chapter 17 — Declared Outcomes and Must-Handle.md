@@ -18,7 +18,7 @@
 Пример:
 
 ```forge
-public static func parseInt(text: String): Int, !ParseIssue
+public static parseInt(text: String): Int, !ParseIssue
 ```
 
 Это означает:
@@ -45,7 +45,7 @@ T   // success-тип
 Некорректно:
 
 ```forge
-func example(): Int, String   // ❌ два success-типа
+example(): Int, String   // ❌ два success-типа
 ```
 
 ---
@@ -55,13 +55,13 @@ func example(): Int, String   // ❌ два success-типа
 Если непомеченный тип не указан, success-тип считается `Void`.
 
 ```forge
-public static func save(path: String): !IoIssue, !AccessDenied
+public static save(path: String): !IoIssue, !AccessDenied
 ```
 
 Эквивалентно:
 
 ```forge
-public static func save(path: String): Void, !IoIssue, !AccessDenied
+public static save(path: String): Void, !IoIssue, !AccessDenied
 ```
 
 ---
@@ -88,7 +88,7 @@ Outcome-тип должен быть объявленным верхнеуров
 Пример:
 
 ```forge
-public func reserve(size: Int): Void, ?AllocFailed
+public reserve(size: Int): Void, ?AllocFailed
 ```
 
 Вызывающий код может проигнорировать `AllocFailed`:
@@ -118,7 +118,7 @@ catch array.reserve(1000) {
 `catch` — это декоратор выражения, которое может вернуть обязательный или опциональный outcome.
 
 ```forge
-let value: Int = catch parseInt(text) {
+var value: Int = catch parseInt(text) {
     issue: ParseIssue => 0
 }
 ```
@@ -167,7 +167,7 @@ const num = catch Int.parse("1") {
 Значение блока — последнее выражение, если не выполнен `return`.
 
 ```forge
-let value: Int = catch parseInt(text) {
+var value: Int = catch parseInt(text) {
     issue: ParseIssue => {
         print "Invalid number: " + issue.message
         0
@@ -196,7 +196,7 @@ let value: Int = catch parseInt(text) {
 Если необходимо обработать только часть исходов, остальные можно пробросить вверх.
 
 ```forge
-let value = forward catch fn() {
+var value = forward catch fn() {
     io: IoIssue => {
         print io.message
         0
@@ -220,7 +220,7 @@ let value = forward catch fn() {
 Корректно:
 
 ```forge
-public static func read(text: String): Int, !ParseIssue {
+public static read(text: String): Int, !ParseIssue {
     forward parseInt(text)
 }
 ```
@@ -228,7 +228,7 @@ public static func read(text: String): Int, !ParseIssue {
 Некорректно:
 
 ```forge
-public static func read(text: String): Int {
+public static read(text: String): Int {
     forward parseInt(text)   // ❌ ParseIssue не объявлен
 }
 ```
@@ -238,7 +238,7 @@ public static func read(text: String): Int {
 Если вызываемая функция возвращает обязательный outcome:
 
 ```forge
-func parse(text: String): Int, !ParseIssue
+parse(text: String): Int, !ParseIssue
 ```
 
 то вызывающий код обязан либо обработать `ParseIssue` через `catch`, либо пробросить его через `forward` из функции, которая тоже объявляет `!ParseIssue`.
@@ -246,7 +246,7 @@ func parse(text: String): Int, !ParseIssue
 Если вызываемая функция возвращает опциональный outcome:
 
 ```forge
-func reserve(size: Int): Void, ?AllocFailed
+reserve(size: Int): Void, ?AllocFailed
 ```
 
 то вызывающий код может:
@@ -258,7 +258,7 @@ func reserve(size: Int): Void, ?AllocFailed
 Проброс как опциональный outcome:
 
 ```forge
-public func prepare(): Void, ?AllocFailed {
+public prepare(): Void, ?AllocFailed {
     forward array.reserve(1000)
 }
 ```
@@ -266,7 +266,7 @@ public func prepare(): Void, ?AllocFailed {
 Проброс с повышением до обязательного outcome:
 
 ```forge
-public func load(): Void, !AllocFailed {
+public load(): Void, !AllocFailed {
     forward array.reserve(1000)
 }
 ```
@@ -277,7 +277,7 @@ public func load(): Void, !AllocFailed {
 Если текущая функция не объявляет `AllocFailed`, использовать `forward` нельзя:
 
 ```forge
-public func load(): Void {
+public load(): Void {
     forward array.reserve(1000) // ❌ AllocFailed не объявлен
 }
 ```
@@ -298,7 +298,7 @@ module app.core
 После такой политики вызов функции:
 
 ```forge
-func reserve(size: Int): Void, ?AllocFailed
+reserve(size: Int): Void, ?AllocFailed
 ```
 
 проверяется так, будто `AllocFailed` является обязательным outcome для кода этого модуля.
@@ -306,7 +306,7 @@ func reserve(size: Int): Void, ?AllocFailed
 Некорректно:
 
 ```forge
-public func load(): Void {
+public load(): Void {
     array.reserve(1000) // ❌ AllocFailed должен быть обработан или проброшен
 }
 ```
@@ -314,7 +314,7 @@ public func load(): Void {
 Корректно:
 
 ```forge
-public func load(): Void {
+public load(): Void {
     catch array.reserve(1000) {
         error: AllocFailed => {
             print "Not enough memory"
@@ -326,7 +326,7 @@ public func load(): Void {
 Также корректно:
 
 ```forge
-public func load(): Void, !AllocFailed {
+public load(): Void, !AllocFailed {
     forward array.reserve(1000)
 }
 ```
@@ -344,7 +344,7 @@ public func load(): Void, !AllocFailed {
 class DivisionByZero
 
 class Calculator {
-public static func divide(a: Int, b: Int): Int, !DivisionByZero {
+public static divide(a: Int, b: Int): Int, !DivisionByZero {
     if b == 0 {
         return DivisionByZero.new()
     }
@@ -357,7 +357,7 @@ public static func divide(a: Int, b: Int): Int, !DivisionByZero {
 Использование:
 
 ```forge
-let result: Int = catch divide(10, 0) {
+var result: Int = catch divide(10, 0) {
     issue: DivisionByZero => {
         print "Cannot divide by zero"
         0
@@ -400,7 +400,7 @@ let result: Int = catch divide(10, 0) {
 Forge разрешает объявлять несколько outcome-типов:
 
 ```forge
-public static func fn(): !IntOutcome, !FloatOutcome, ?StringOutcome
+public static fn(): !IntOutcome, !FloatOutcome, ?StringOutcome
 ```
 
 Но это следует использовать осторожно.

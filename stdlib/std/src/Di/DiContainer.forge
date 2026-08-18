@@ -1,4 +1,8 @@
+use std.Di.WriteOnlyDiContainerInterface
+
 class
+
+implements WriteOnlyDiContainerInterface
 
 #state defs: Dict<String, Bool> = {}
 #state graph: Dict<String, String[]> = {}
@@ -7,7 +11,7 @@ class
 
 public new() {}
 
-public template func apply<T:struct>(defs: T): Void {
+public template apply<T:struct>(defs: T): Void {
     #{
         if state.built {
             Compiler.error("Cannot register services after DI build")
@@ -34,7 +38,7 @@ public template func apply<T:struct>(defs: T): Void {
     #}
 }
 
-public template func build(): Void {
+public template build(): Void {
     #{
         for service in state.graph {
             for dependency in state.graph[service] {
@@ -54,7 +58,7 @@ public template func build(): Void {
     #}
 }
 
-public template func resolve<T:class>(): T {
+public template resolve<T:class>(): T {
     #{
         const service = Reflection.type<T>().name
 

@@ -1,5 +1,5 @@
 class
 
-public static func write(str:String) {
+public static write(str:String) {
     print str
 }

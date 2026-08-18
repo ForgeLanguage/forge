@@ -7,7 +7,7 @@
 Есть два вида переменных:
 
 - `const` — неизменяемые
-- `let` — изменяемые
+- `var` — изменяемые
 
 Тип можно указать явно или вывести из инициализатора.
 
@@ -18,7 +18,7 @@
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const message: String = "Hello"
     print message
@@ -34,21 +34,21 @@ public static func main(args: String[]): Void
 
 ---
 
-## `let`
+## `var`
 
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
-    let counter: Int = 0
+    var counter: Int = 0
     counter = counter + 1
 
     print counter
 }
 ```
 
-`let` позволяет изменить значение после объявления.
+`var` позволяет изменить значение после объявления.
 
 ---
 
@@ -56,7 +56,7 @@ public static func main(args: String[]): Void
 
 ```forge
 const n = 10
-let name = "Forge"
+var name = "Forge"
 ```
 
 ---
@@ -78,7 +78,7 @@ print second // 20
 Та же форма доступна для изменяемых переменных:
 
 ```forge
-let [left, right] = values
+var [left, right] = values
 left = left + 1
 ```
 
@@ -120,7 +120,7 @@ const [red, green, blue] = [255, 128, 0]
 Вот и всё.
 
 - `const` — значение
-- `let` — переменная
+- `var` — переменная
 - тип указывается через `:`
 - тип может быть выведен из инициализатора
 - `[a, b]` в локальном объявлении связывает первые элементы массива

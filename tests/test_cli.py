@@ -84,7 +84,7 @@ class ForgeCliTests(unittest.TestCase):
             source = root / "library.forge"
             output = root / "app"
             c_output = root / "c"
-            source.write_text("func helper(): Int => 1")
+            source.write_text("helper(): Int => 1")
 
             result = subprocess.run(
                 [str(FORGE), "compile", str(source), "-o", str(output), "--c-out", str(c_output)],
@@ -136,7 +136,7 @@ class ForgeCliTests(unittest.TestCase):
             source = Path(directory) / "app.forge"
             c_output = Path(directory) / "c"
             binary = Path(directory) / "app"
-            source.write_text('func main(): Void { print "compiled" }')
+            source.write_text('main(): Void { print "compiled" }')
 
             result = subprocess.run(
                 [
@@ -178,7 +178,7 @@ class ForgeCliTests(unittest.TestCase):
     def test_run_compiles_without_optimizations_and_runs_binary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "app.forge"
-            source.write_text('func main(): Void { print "Hello from Forge" }')
+            source.write_text('main(): Void { print "Hello from Forge" }')
 
             result = subprocess.run(
                 [str(FORGE), "run", str(source)],
@@ -196,8 +196,8 @@ class ForgeCliTests(unittest.TestCase):
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-async func answer(): Int => 42
-func main(): Void {
+async answer(): Int => 42
+main(): Void {
     print answer().await()
 }
 """
@@ -219,9 +219,9 @@ func main(): Void {
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-func read(path: String): String => "sync"
-async func read(path: String): String => "async"
-func main(): Void {
+read(path: String): String => "sync"
+async read(path: String): String => "async"
+main(): Void {
     print read("file.txt")
     print read("file.txt").await()
 }
@@ -244,8 +244,8 @@ func main(): Void {
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-async func read(path: String): String => "async"
-func main(): Void {
+async read(path: String): String => "async"
+main(): Void {
     const text: String = read("file.txt")
     print text
 }
@@ -277,8 +277,8 @@ includes = ["stdlib.h"]
             )
             (root / "src" / "main.forge").write_text(
                 """
-async native func absValue(value: Int): Int = "abs"
-func main(): Void {
+async native absValue(value: Int): Int = "abs"
+main(): Void {
     print absValue(-7).await()
 }
 """
@@ -309,8 +309,8 @@ includes = ["stdlib.h"]
             )
             (root / "src" / "main.forge").write_text(
                 """
-async native func absValue(value: Int): Int = "abs"
-func main(): Void {
+async native absValue(value: Int): Int = "abs"
+main(): Void {
     const pending = absValue(-7)
     print pending.await()
 }
@@ -382,21 +382,21 @@ ForgeArray_Byte bytes_with_nul(void) {
             )
             (root / "src" / "main.forge").write_text(
                 """
-native func bytesWithNul(): Byte[] = "bytes_with_nul"
+native bytesWithNul(): Byte[] = "bytes_with_nul"
 
-func chooseStrings(flag: Bool, fallback: String[]): String[] {
+chooseStrings(flag: Bool, fallback: String[]): String[] {
     return flag ? "owned-return,x".split(",", 2) : fallback
 }
 
-func chooseBorrowed(flag: Bool, left: String[], right: String[]): String[] {
+chooseBorrowed(flag: Bool, left: String[], right: String[]): String[] {
     return flag ? left : right
 }
 
-func chooseBytes(flag: Bool, fallback: Byte[]): Byte[] {
+chooseBytes(flag: Bool, fallback: Byte[]): Byte[] {
     return flag ? "byte-return".toBytes() : fallback
 }
 
-func main(): Void {
+main(): Void {
     print "Forge".length()
     print "".isEmpty()
     print "abc".indexOf("")
@@ -448,7 +448,7 @@ func main(): Void {
     print String.fromInt(-17)
     const decoded: String = true ? String.fromBytes("ok".toBytes()) : "bad"
     print decoded
-    let decodedAgain = "old"
+    var decodedAgain = "old"
     decodedAgain = true ? String.fromBytes("next".toBytes()) : "bad"
     print decodedAgain
     const first = "first,second".split(",", 2)[0]
@@ -475,7 +475,7 @@ func main(): Void {
     const returnedBytesBorrowed = chooseBytes(false, fallbackBytes)
     print String.fromBytes(returnedBytesOwned)
     print String.fromBytes(returnedBytesBorrowed)
-    let reassigned = "old".split(",", 2)
+    var reassigned = "old".split(",", 2)
     reassigned = "new,value".split(",", 2)
     print reassigned[1]
 }
@@ -590,7 +590,7 @@ std = "0.1.0"
 use std.Net.Network
 use std.Net.NetworkIssue
 
-func main(): Void {{
+main(): Void {{
     const stream = catch Network.connectTcp("127.0.0.1", {port}).await() {{
         issue: NetworkIssue => {{
             print issue.message
@@ -662,7 +662,7 @@ std = "0.1.0"
 use std.Http.Http
 use std.Http.HttpIssue
 
-func main(): Void {{
+main(): Void {{
     const response = catch Http.get("http://127.0.0.1:{port}/test").await() {{
         issue: HttpIssue => {{
             print issue.message
@@ -722,12 +722,12 @@ use std.Http.HttpServerResponse
 class EchoHandler {{
     implements HttpServerHandler
 
-    public func handle(path: String, body: String): HttpServerResponse {{
+    public handle(path: String, body: String): HttpServerResponse {{
         return HttpServerResponse.new(201, path + ":" + body)
     }}
 }}
 
-func main(): Void {{
+main(): Void {{
     const handler: HttpServerHandler = EchoHandler.new()
     catch HttpServer.serve({port}, handler).await() {{
         issue: HttpIssue => {{
@@ -802,7 +802,7 @@ std = "0.1.0"
 use std.Json.Json
 use std.Json.JsonIssue
 
-func title(): String, !JsonIssue {
+title(): String, !JsonIssue {
     const value = forward Json.parse("{\\"banners\\":[{\\"title\\":\\"banner\\",\\"priceModel\\":1,\\"active\\":true}]}")
     const banners = forward Json.get(value, "banners")
     const count = forward Json.length(banners)
@@ -816,7 +816,7 @@ func title(): String, !JsonIssue {
     return "bad"
 }
 
-func main(): Void {
+main(): Void {
     const value = catch title() {
         issue: JsonIssue => {
             print issue.message
@@ -864,11 +864,11 @@ struct Banner {
     public active: Bool
 }
 
-func load(): Banner, !JsonIssue {
+load(): Banner, !JsonIssue {
     return forward Json.parse<Banner>("{\\"title\\":\\"banner\\",\\"priceModel\\":1,\\"active\\":true}")
 }
 
-func main(): Void {
+main(): Void {
     const banner = catch load() {
         issue: JsonIssue => {
             print issue.message
@@ -928,11 +928,11 @@ struct Request {
     public user: User
 }
 
-func load(): Request, !JsonIssue {
+load(): Request, !JsonIssue {
     return forward Json.parse<Request>("{\\"bannerId\\":42,\\"user\\":{\\"id\\":\\"u-1\\",\\"zoneId\\":10}}")
 }
 
-func main(): Void {
+main(): Void {
     const request = catch load() {
         issue: JsonIssue => {
             print issue.message
@@ -980,11 +980,11 @@ struct Request {
     public bannerIds: Int[]
 }
 
-func load(): Request, !JsonIssue {
+load(): Request, !JsonIssue {
     return forward Json.parse<Request>("{\\"bannerIds\\":[42,7]}")
 }
 
-func main(): Void {
+main(): Void {
     const request = catch load() {
         issue: JsonIssue => {
             print issue.message
@@ -1038,11 +1038,11 @@ struct Request {
     public headers: Header[]
 }
 
-func load(text: String): Request, !JsonIssue {
+load(text: String): Request, !JsonIssue {
     return forward Json.parse<Request>(text)
 }
 
-func main(): Void {
+main(): Void {
     const request = catch load("{\\"headers\\":[{\\"name\\":\\"Accept\\",\\"value\\":\\"text/plain\\"},{\\"name\\":\\"X-Trace\\",\\"value\\":\\"trace-1\\"}]}") {
         issue: JsonIssue => {
             print issue.message
@@ -1102,7 +1102,7 @@ struct Payload {
     public active: Bool
 }
 
-func main(): Void {
+main(): Void {
     const payload: Payload = {
         count: 2,
         active: true
@@ -1158,7 +1158,7 @@ struct Payload {
     public flags: Bool[]
 }
 
-func main(): Void {
+main(): Void {
     const user: User = {
         id: "u-1",
         zoneId: 10
@@ -1213,7 +1213,7 @@ struct Payload {
     public text: String
 }
 
-func main(): Void {
+main(): Void {
     const payload: Payload = {
         text: "quote: \\" slash: \\\\ line:\\n tab:\\t"
     }
@@ -1263,11 +1263,11 @@ struct Payload {
     public user: User?
 }
 
-func load(text: String): Payload, !JsonIssue {
+load(text: String): Payload, !JsonIssue {
     return forward Json.parse<Payload>(text)
 }
 
-func main(): Void {
+main(): Void {
     const user: User = { id: "u-1" }
     const present: Payload = { user: user }
     const missing: Payload = { user: null }
@@ -1370,13 +1370,13 @@ std = "0.1.0"
 use std.Http.Http
 use std.Http.HttpIssue
 
-async func safeStatus(url: String): Int {{
+async safeStatus(url: String): Int {{
     return catch await Http.status(url) {{
         issue: HttpIssue => 0
     }}
 }}
 
-func main(): Void {{
+main(): Void {{
     const urls = [
         "http://127.0.0.1:{port}/ok",
         "http://127.0.0.1:{port}/created",
@@ -1384,11 +1384,11 @@ func main(): Void {{
         "http://127.0.0.1:{port}/error",
     ]
     const statuses = (safeStatus task[urls]).all().await()
-    let ok = 0
-    let missing = 0
-    let serverError = 0
-    let other = 0
-    let i = 0
+    var ok = 0
+    var missing = 0
+    var serverError = 0
+    var other = 0
+    var i = 0
     while i < 4 {{
         const status = statuses[i]
         if status >= 200 && status < 300 {{
@@ -1433,8 +1433,8 @@ func main(): Void {{
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-async func twice(value: Int): Int => value * 2
-func main(): Void {
+async twice(value: Int): Int => value * 2
+main(): Void {
     const values = [1, 2]
     const doubled = (twice task[values]).all().await()
     print doubled[1]
@@ -1458,9 +1458,9 @@ func main(): Void {
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-func main(): Void {
+main(): Void {
     const values = [1, 2, 3]
-    let total = 0
+    var total = 0
     for values as value {
         total = total + value
     }
@@ -1485,8 +1485,8 @@ func main(): Void {
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-func twice(value: Int): Int => value * 2
-func main(): Void {
+twice(value: Int): Int => value * 2
+main(): Void {
     const values = [1, 2]
     const doubled = twice[values]
     print doubled[1]
@@ -1519,8 +1519,8 @@ includes = ["stdlib.h"]
             )
             (root / "src" / "main.forge").write_text(
                 """
-async native func absValue(value: Int): Int = "abs"
-func main(): Void {
+async native absValue(value: Int): Int = "abs"
+main(): Void {
     const values = [-1, -2]
     const pending = absValue task[values]
     const results = pending.all().await()
@@ -1545,8 +1545,8 @@ func main(): Void {
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-async func twice(value: Int): Int => value * 2
-func main(): Void {
+async twice(value: Int): Int => value * 2
+main(): Void {
     const values = [1, 2, 3]
     print (twice task[values]).first().await()
     print (twice task[values]).any().await()
@@ -1585,7 +1585,7 @@ nativepkg = "1.0.0"
                 """
 use nativepkg.Math
 
-func main(): Int {
+main(): Int {
     return Math.answer()
 }
 """
@@ -1608,7 +1608,7 @@ include_dirs = ["include"]
                 """
 class
 
-public static native func answer(): Int = "native_answer"
+public static native answer(): Int = "native_answer"
 """
             )
 
@@ -1641,14 +1641,14 @@ std = "0.1.0"
 use std.Di.DiContainer
 
 class Foo {
-    public func name(): String => "foo"
+    public name(): String => "foo"
 }
 
 class Bar {
     public new(public take foo: Foo) {}
 }
 
-func main(): Void {
+main(): Void {
     const bar: Bar = DiContainer.resolve<Bar>()
     print bar.foo.name()
 }
@@ -1686,22 +1686,22 @@ std = "0.1.0"
 use std.Di.DiContainer
 
 interface Service {
-    public func name(): String
+    public name(): String
 }
 
 class First {
     implements Service
 
-    public func name(): String => "first"
+    public name(): String => "first"
 }
 
 class Second {
     implements Service
 
-    public func name(): String => "second"
+    public name(): String => "second"
 }
 
-func main(): Void {
+main(): Void {
     const services: Service[] = DiContainer.resolveAll<Service>()
     print services.len
     print services[0].name()
@@ -1744,7 +1744,7 @@ use std.Di.DiIntParameter
 use std.Di.DiStringParameter
 
 class Foo {
-    public func name(): String => "foo"
+    public name(): String => "foo"
 }
 
 class Configured {
@@ -1756,7 +1756,7 @@ class Configured {
     ) {}
 }
 
-func main(): Void {
+main(): Void {
     const strings: DiStringParameter[] = [{ name: "name", value: "alice" }]
     const ints: DiIntParameter[] = [{ name: "count", value: 7 }]
     const bools: DiBoolParameter[] = [{ name: "enabled", value: true }]
@@ -1803,16 +1803,16 @@ use std.Di.DiIntParameter
 use std.Di.DiStringParameter
 
 interface Service {
-    public func name(): String
+    public name(): String
 }
 
 class First {
     implements Service
-    public func name(): String => "first"
+    public name(): String => "first"
 }
 
 class Foo {
-    public func name(): String => "foo"
+    public name(): String => "foo"
 }
 
 class Configured {
@@ -1824,7 +1824,7 @@ class Configured {
     ) {}
 }
 
-func main(): Void {
+main(): Void {
     const builder = DiBuilder.create(
         [{ name: "name", value: "alice" }],
         [{ name: "count", value: 7 }],
@@ -1860,7 +1860,7 @@ func main(): Void {
             source.write_text(
                 """
 class User {}
-func main(): Void {
+main(): Void {
     const user: User = User.new("name")
 }
 """
@@ -1897,7 +1897,7 @@ use Vector2Int
 
 class
 
-public static func sum(point: Vector2Int): Int {
+public static sum(point: Vector2Int): Int {
     return point.x + point.y
 }
 """
@@ -1908,7 +1908,7 @@ public static func sum(point: Vector2Int): Int {
 use Math.Vector2Int
 use Math.Figure
 
-func main(): Int {
+main(): Int {
     return Figure.sum(Vector2Int.new(20, 22))
 }
 """
@@ -1942,7 +1942,7 @@ std = "0.1.0"
                 """
 use std.Http.HttpIssue
 
-func pathOf(requestLine: String): String, !HttpIssue {
+pathOf(requestLine: String): String, !HttpIssue {
     const parts = requestLine.split(" ", 3)
     const [method, path, body] = catch parts {
         issue: PatternMismatch => {
@@ -1951,7 +1951,7 @@ func pathOf(requestLine: String): String, !HttpIssue {
     }
     return path
 }
-func main(): Void {
+main(): Void {
     const valid = catch pathOf("POST /feed payload") {
         issue: HttpIssue => {
             print issue.message
@@ -1986,11 +1986,11 @@ func main(): Void {
             source = Path(directory) / "app.forge"
             source.write_text(
                 """
-func values(): Int[] {
+values(): Int[] {
     print "source"
     return [20, 22]
 }
-func main(): Void {
+main(): Void {
     const [left, right] = catch values() {
         issue: PatternMismatch => { return }
     }
@@ -2022,20 +2022,20 @@ class File {
         this.value = value
     }
 }
-func shortFiles(): File[] => [File.new(1)]
-func useOwnedFallback(files: File[]): Int {
+shortFiles(): File[] => [File.new(1)]
+useOwnedFallback(files: File[]): Int {
     const [first] = catch files {
         issue: PatternMismatch => [File.new(7)]
     }
     return first.value
 }
-func useBorrowedFallback(files: File[]): Int {
+useBorrowedFallback(files: File[]): Int {
     const [first, second] = catch shortFiles() {
         issue: PatternMismatch => files
     }
     return first.value + second.value
 }
-func main(): Void {
+main(): Void {
     const empty: File[] = []
     print useOwnedFallback(empty)
     const fallback: File[] = [File.new(20), File.new(22)]
@@ -2063,14 +2063,14 @@ func main(): Void {
 @multidef
 class DivisionByZero {}
 class Calculator {
-    public static func divide(a: Int, b: Int): Int, !DivisionByZero {
+    public static divide(a: Int, b: Int): Int, !DivisionByZero {
         if b == 0 {
             return DivisionByZero.new()
         }
         return a / b
     }
 }
-func main(): Void {
+main(): Void {
     const result: Int = catch Calculator.divide(10, 0) {
         issue: DivisionByZero => 42
     }
@@ -2098,11 +2098,11 @@ func main(): Void {
 @multidef
 class Failed {}
 class Work {
-    public static func run(): Int, !Failed {
+    public static run(): Int, !Failed {
         return Failed.new()
     }
 }
-func main(): Int {
+main(): Int {
     const result: Int = catch Work.run() {
         failed: Failed => {
             return 7
@@ -2133,11 +2133,11 @@ class Failed {
     public new(public code: Int) {}
 }
 class Work {
-    public static func run(): Int, !Failed {
+    public static run(): Int, !Failed {
         return Failed.new(-3)
     }
 }
-func main(): Int {
+main(): Int {
     const result: Int = catch Work.run() {
         failed: Failed => {
             print "failed (" + failed.code + ")"
@@ -2169,16 +2169,16 @@ func main(): Int {
 class ParseIssue {}
 class IoIssue {}
 class Parser {
-    public static func parse(): Int, !ParseIssue, !IoIssue {
+    public static parse(): Int, !ParseIssue, !IoIssue {
         return IoIssue.new()
     }
 }
-func parseAgain(): Int, !IoIssue {
+parseAgain(): Int, !IoIssue {
     return forward catch Parser.parse() {
         issue: ParseIssue => 10
     }
 }
-func main(): Int {
+main(): Int {
     const result: Int = catch parseAgain() {
         issue: IoIssue => 7
     }
@@ -2205,9 +2205,9 @@ func main(): Int {
 @multidef
 class AllocFailed {}
 class Array {
-    public static func reserve(size: Int): Void, ?AllocFailed {}
+    public static reserve(size: Int): Void, ?AllocFailed {}
 }
-func main(): Void {
+main(): Void {
     Array.reserve(1000)
     print "reserved"
 }
@@ -2230,7 +2230,7 @@ func main(): Void {
             source = Path(directory) / "main.forge"
             source.write_text(
                 """
-func main(): Void {
+main(): Void {
     const fromFor = for [1, 2] as item {
         if item == 2 {
             break item
@@ -2268,7 +2268,7 @@ func main(): Void {
     print exhausted
 }
 
-func fallback(): Int {
+fallback(): Int {
     print "fallback"
     return 13
 }
@@ -2292,8 +2292,8 @@ func fallback(): Int {
             source = Path(directory) / "loop_condition_preludes.forge"
             source.write_text(
                 """
-func main(): Void {
-    let whileIndex = 0
+main(): Void {
+    var whileIndex = 0
     const fromWhile = while (while false { break false } else whileIndex < 2) {
         whileIndex++
         if whileIndex > 5 {
@@ -2301,7 +2301,7 @@ func main(): Void {
         }
     } else whileIndex
 
-    let doIndex = 0
+    var doIndex = 0
     const fromDo = do {
         doIndex++
         if doIndex > 5 {

@@ -387,7 +387,7 @@ while condition {
 ## Пример
 
 ```forge
-let i = 0
+var i = 0
 
 while i < 5 {
     print i
@@ -410,7 +410,7 @@ do {
 ## Пример
 
 ```forge
-let i = 0
+var i = 0
 
 do {
     print i

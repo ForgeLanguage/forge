@@ -7,7 +7,7 @@ Forge использует `if` для условного выполнения.
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const value: Int = 10
 
@@ -26,7 +26,7 @@ public static func main(args: String[]): Void
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const value: Int = 3
 
@@ -45,7 +45,7 @@ public static func main(args: String[]): Void
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const value: Int = 5
 

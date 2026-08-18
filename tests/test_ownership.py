@@ -15,15 +15,15 @@ class OwnershipPlanTests(unittest.TestCase):
 @multidef
 class Issue {}
 class Parser {
-    public static func parse(): String, !Issue {
+    public static parse(): String, !Issue {
         return Issue.new()
     }
 }
 struct Banner {
     public title: String
 }
-func load(): Banner, !Issue {
-    let result: Banner = {}
+load(): Banner, !Issue {
+    var result: Banner = {}
     result.title = forward Parser.parse()
     return result
 }
@@ -56,7 +56,7 @@ func load(): Banner, !Issue {
         result = lower(
             parse(
                 """
-func value(): Void {
+value(): Void {
     const result: String? = while true {
         break "selected"
     }
@@ -78,7 +78,7 @@ func value(): Void {
 class Box {
     public values: Int[]
 }
-func main(box: Box): Void {
+main(box: Box): Void {
     const [first] = catch box.values {
         issue: PatternMismatch => { return }
     }
@@ -97,7 +97,7 @@ func main(box: Box): Void {
         result = lower(
             parse(
                 """
-func read(text: String): Void {
+read(text: String): Void {
     const [first] = catch text.split(",", 1) {
         issue: PatternMismatch => { return }
     }

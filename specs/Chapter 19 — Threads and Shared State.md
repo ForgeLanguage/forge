@@ -34,7 +34,7 @@ const result = t.join()
 ```forge
 class Thread<T>
 {
-    func join(): T
+    join(): T
 }
 ```
 
@@ -178,7 +178,7 @@ lock user {
 ### Нельзя выносить borrow из lock
 
 ```forge
-let cache: Cache
+var cache: Cache
 
 lock user {
     cache = user.cache   // ❌ borrow escapes lock
@@ -194,7 +194,7 @@ cache.set("x", "y")
 Можно выносить только значения, не связанные с защищённым mutable-графом:
 
 ```forge
-let name: String
+var name: String
 
 lock user {
     name = user.name
@@ -232,7 +232,7 @@ lock user {
 Выносить внутренние ссылки:
 
 ```forge
-let cache
+var cache
 
 lock user {
     cache = user.cache   // ❌ нельзя

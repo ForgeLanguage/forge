@@ -1,0 +1,3 @@
+interface
+
+public template apply<T:struct>(defs: T): Void

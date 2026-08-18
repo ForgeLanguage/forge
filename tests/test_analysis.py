@@ -15,7 +15,7 @@ class AnalysisTests(unittest.TestCase):
             """
 class App {
     public args: String[]
-    func main(name: String): Void {
+    main(name: String): Void {
         const greeting = name
     }
 }
@@ -59,8 +59,8 @@ const answer = 42
     def test_allows_sync_and_async_function_twins(self) -> None:
         program = parse(
             """
-func read(path: String): String => "sync"
-async func read(path: String): String => "async"
+read(path: String): String => "sync"
+async read(path: String): String => "async"
 """
         )
 
@@ -71,8 +71,8 @@ async func read(path: String): String => "async"
     def test_rejects_duplicate_async_function_twin(self) -> None:
         program = parse(
             """
-async func read(path: String): String => "one"
-async func read(path: String): String => "two"
+async read(path: String): String => "one"
+async read(path: String): String => "two"
 """
         )
 
@@ -84,8 +84,8 @@ async func read(path: String): String => "two"
     def test_rejects_sync_async_twins_with_different_parameters(self) -> None:
         program = parse(
             """
-func read(path: String): String => "sync"
-async func read(path: String, encoding: String): String => "async"
+read(path: String): String => "sync"
+async read(path: String, encoding: String): String => "async"
 """
         )
 
@@ -95,7 +95,7 @@ async func read(path: String, encoding: String): String => "async"
         self.assertIn("Duplicate function 'read'", result.diagnostics[0].message)
 
     def test_reports_duplicate_parameters(self) -> None:
-        program = parse("func pick(value: Int, value: Int): Int => value")
+        program = parse("pick(value: Int, value: Int): Int => value")
 
         with self.assertRaises(ValidationError) as raised:
             validate(program)
@@ -119,7 +119,7 @@ return value
         self.assertIn("'return' can only be used inside a function", messages)
 
     def test_reports_modifier_conflicts(self) -> None:
-        program = parse("public private func main(): Void {}")
+        program = parse("public private main(): Void {}")
 
         result = validate(program, raise_on_error=False)
 
@@ -170,7 +170,7 @@ return value
     def test_array_destructuring_declares_bindings_and_reports_duplicates(self) -> None:
         program = parse(
             """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first, first] = values
 }
 """

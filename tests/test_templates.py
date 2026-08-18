@@ -13,7 +13,7 @@ class TemplateExpansionTests(unittest.TestCase):
     def test_expands_nongeneric_template_function_in_place(self) -> None:
         expanded = expand_templates(
             """
-public template func answer(): Int {
+public template answer(): Int {
     return 42
 }
 
@@ -23,7 +23,8 @@ const value = answer()
         )
 
         self.assertNotIn("template func", expanded)
-        self.assertIn("public func answer(): Int", expanded)
+        self.assertNotIn("func answer", expanded)
+        self.assertIn("public answer(): Int", expanded)
         self.assertIn("const value = answer()", expanded)
 
     def test_expands_struct_property_loop_into_specialized_function(self) -> None:
@@ -34,8 +35,8 @@ struct User {
     public age: Int
 }
 
-public template func parse<T:struct>(reader: Reader): T {
-    let result: T = {}
+public template parse<T:struct>(reader: Reader): T {
+    var result: T = {}
     #for Reflection.type<T>().properties as property {
         result.#{property.name} = Reader.get#{property.type}(reader, "#{property.name}")
     #}
@@ -49,7 +50,8 @@ const other = parse<User>(Reader.new())
         )
 
         self.assertNotIn("template func", expanded)
-        self.assertEqual(expanded.count("public func parse__User(reader: Reader): User"), 1)
+        self.assertNotIn("func parse", expanded)
+        self.assertEqual(expanded.count("public parse__User(reader: Reader): User"), 1)
         self.assertIn('result.name = Reader.getString(reader, "name")', expanded)
         self.assertIn('result.age = Reader.getInt(reader, "age")', expanded)
         self.assertIn("const user = parse__User(Reader.new())", expanded)
@@ -63,8 +65,8 @@ const other = parse<User>(Reader.new())
                     """
 class
 
-public static template func make<T:struct>(reader: Reader): T {
-    let result: T = {}
+public static template make<T:struct>(reader: Reader): T {
+    var result: T = {}
     #for Reflection.type<T>().properties as property {
         result.#{property.name} = Reader.get#{property.type}(reader, "#{property.name}")
     #}
@@ -87,9 +89,10 @@ const user = Box.make<User>(Reader.new())
         )
 
         self.assertNotIn("template func", expanded["lib/Box.forge"])
+        self.assertNotIn("func make", expanded["lib/Box.forge"])
         self.assertIn("Box_make__User", expanded["main.forge"])
         self.assertIn("const user = Box_make__User(Reader.new())", expanded["main.forge"])
-        self.assertIn("func Box_make__User(reader: Reader): User", expanded["main.forge"])
+        self.assertIn("Box_make__User(reader: Reader): User", expanded["main.forge"])
         self.assertIn('result.name = Reader.getString(reader, "name")', expanded["main.forge"])
 
     def test_expands_class_constructor_parameter_loop(self) -> None:
@@ -101,7 +104,7 @@ class Bar {
     public new(public take foo: Foo, public name: String) {}
 }
 
-template func create<T:class>(container: DiContainer): T {
+template create<T:class>(container: DiContainer): T {
     return T.new(
     #for Reflection.type<T>().constructor.parameters as parameter {
         #{parameter.separator}#{parameter.movePrefix}container.resolve#{parameter.type}()
@@ -114,7 +117,7 @@ const bar = create<Bar>(DiContainer.new())
             source_name="main.forge",
         )
 
-        self.assertIn("func create__Bar(container: DiContainer): Bar", expanded)
+        self.assertIn("create__Bar(container: DiContainer): Bar", expanded)
         self.assertIn("move container.resolveFoo()", expanded)
         self.assertIn(",container.resolveString()", expanded)
         self.assertIn("const bar = create__Bar(DiContainer.new())", expanded)
@@ -127,7 +130,7 @@ struct User {
     public name: String
 }
 
-template func create<T:class>(): T {
+template create<T:class>(): T {
     return T.new()
 }
 
@@ -147,7 +150,7 @@ class A {
     public new() {}
 }
 
-template func create<T:class>(): T {
+template create<T:class>(): T {
     #panic "Cannot build #{Reflection.type<T>().name}"
     return T.new()
 }
@@ -162,20 +165,20 @@ const value = create<A>()
             """
 @multidef
 interface Service {
-    public func name(): String
+    public name(): String
 }
 
 class First {
     implements Service
-    public func name(): String => "first"
+    public name(): String => "first"
 }
 
 class Second {
     implements Service
-    public func name(): String => "second"
+    public name(): String => "second"
 }
 
-template func all<T:interface>(): T[] {
+template all<T:interface>(): T[] {
     return [
     #for Reflection.type<T>().implementations as implementation {
         #{implementation.separator}make#{implementation.type}()
@@ -188,7 +191,7 @@ const services = all<Service>()
             source_name="main.forge",
         )
 
-        self.assertIn("func all__Service(): Service[]", expanded)
+        self.assertIn("all__Service(): Service[]", expanded)
         self.assertIn("makeFirst()", expanded)
         self.assertIn(",makeSecond()", expanded)
         self.assertIn("const services = all__Service()", expanded)
@@ -202,7 +205,7 @@ struct Defs {
     public logger: Definition<Logger>
 }
 class Logger {}
-template func services<T:struct>(): String {
+template services<T:struct>(): String {
     return ""
     #for Reflection.type<T>().properties as field {
     const #{field.name}Name = "#{field.type.arguments[0].name}"
@@ -222,7 +225,7 @@ struct User {
     public name: String
 }
 
-template func decode<T:struct>(value: String): T {
+template decode<T:struct>(value: String): T {
     const result: T = {}
     return result
 }
@@ -233,7 +236,7 @@ const users = decode<User>[values]
             source_name="main.forge",
         )
 
-        self.assertIn("func decode__User(value: String): User", expanded)
+        self.assertIn("decode__User(value: String): User", expanded)
         self.assertIn("const users = decode__User[values]", expanded)
         self.assertNotIn("decode<User>", expanded)
 
@@ -245,7 +248,7 @@ class Builder {
 
     #state compiled: Bool = false
 
-    public template func apply<T:struct>(): Void {
+    public template apply<T:struct>(): Void {
         #{
             if state.compiled {
                 Compiler.error("already compiled")
@@ -253,7 +256,7 @@ class Builder {
         #}
     }
 
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
@@ -283,7 +286,7 @@ class Builder {
 
     #state compiled: Bool = false
 
-    public template func apply<T:struct>(): Void {
+    public template apply<T:struct>(): Void {
         #{
             if state.compiled {
                 Compiler.error("already compiled")
@@ -291,7 +294,7 @@ class Builder {
         #}
     }
 
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
@@ -315,7 +318,7 @@ class Builder {
 
     #state compiled: Bool = false
 
-    public template func apply<T:struct>(): Void {
+    public template apply<T:struct>(): Void {
         #{
             if state.compiled {
                 Compiler.error("already compiled")
@@ -323,7 +326,7 @@ class Builder {
         #}
     }
 
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
@@ -352,7 +355,7 @@ class Builder {
 
     #state compiled: Bool = false
 
-    public template func apply<T:struct>(): Void {
+    public template apply<T:struct>(): Void {
         #{
             if state.compiled {
                 Compiler.error("already compiled")
@@ -360,7 +363,7 @@ class Builder {
         #}
     }
 
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
@@ -386,7 +389,7 @@ alias.apply<Core>()
                 """
 class Builder {
     #state compiled: Bool = false
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
@@ -404,14 +407,14 @@ app.compile()
             """
 class Builder {
     #state compiled: Bool = false
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
     }
 }
 
-func main(): Void {
+main(): Void {
     container.compile()
 }
 """,
@@ -430,7 +433,7 @@ func main(): Void {
 class Builder {
     public new() {}
     #state compiled: Bool = false
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             state.compiled = true
         #}
@@ -453,14 +456,14 @@ class Builder {
     public new() {}
     #state graph: Dict<String, String[]> = {}
 
-    public template func registerCycle(): Void {
+    public template registerCycle(): Void {
         #{
             state.graph["A"] = ["B"]
             state.graph["B"] = ["A"]
         #}
     }
 
-    public template func compile(): Void {
+    public template compile(): Void {
         #{
             const cycle = Graph.findCycle(state.graph)
             if cycle != null {
@@ -528,7 +531,7 @@ const workerLogger = worker.resolve<WorkerLogger>()
         self.assertIn("DiContainer_apply__WorkerDefs__Config_2(workerDefs)", main)
         self.assertIn("DiContainer_build__nongeneric__Config_2()", main)
         self.assertIn("DiContainer_resolve__WorkerLogger__Config_2()", main)
-        self.assertIn("func DiContainer_resolve__Logger__Config_1(): Logger", main)
+        self.assertIn("DiContainer_resolve__Logger__Config_1(): Logger", main)
         self.assertIn("return Logger.new(", main)
         self.assertIn("return Service.new(move Logger.new())", main)
 
@@ -621,6 +624,53 @@ app.apply<AppDefs>(defs)
                 )
             )
 
+    def test_template_method_can_satisfy_interface_contract_before_expansion(self) -> None:
+        expanded = expand_template_sources(
+            (
+                (
+                    "ContainerInterface.forge",
+                    """
+interface
+
+public template apply<T:struct>(defs: T): Void
+""",
+                ),
+                (
+                    "Container.forge",
+                    """
+use ContainerInterface
+
+class
+
+implements ContainerInterface
+
+#state applied: Bool = false
+
+public new() {}
+
+public template apply<T:struct>(defs: T): Void {
+    #{
+        state.applied = true
+    #}
+}
+""",
+                ),
+                (
+                    "main.forge",
+                    """
+struct Defs {}
+
+const container = Container.new()
+const defs: Defs = {}
+container.apply<Defs>(defs)
+""",
+                ),
+            )
+        )
+
+        self.assertNotIn("implements ContainerInterface", expanded["Container.forge"])
+        self.assertIn("Container_apply__Defs__Config_1(defs)", expanded["main.forge"])
+
     def test_project_compiles_template_expansion(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -631,8 +681,8 @@ app.apply<AppDefs>(defs)
 class Reader {
     public new() {}
 
-    public static func getString(reader: Reader, name: String): String => name
-    public static func getInt(reader: Reader, name: String): Int => 42
+    public static getString(reader: Reader, name: String): String => name
+    public static getInt(reader: Reader, name: String): Int => 42
 }
 
 struct User {
@@ -640,15 +690,15 @@ struct User {
     public age: Int
 }
 
-template func parse<T:struct>(reader: Reader): T {
-    let result: T = {}
+template parse<T:struct>(reader: Reader): T {
+    var result: T = {}
     #for Reflection.type<T>().properties as property {
         result.#{property.name} = Reader.get#{property.type}(reader, "#{property.name}")
     #}
     return result
 }
 
-func main(): Void {
+main(): Void {
     const reader = Reader.new()
     const user = parse<User>(reader)
     print user.name
@@ -669,11 +719,11 @@ func main(): Void {
             (root / "src").mkdir()
             (root / "src" / "main.forge").write_text(
                 """
-template func answer(): Int {
+template answer(): Int {
     return 42
 }
 
-func main(): Void {
+main(): Void {
     print answer()
 }
 """

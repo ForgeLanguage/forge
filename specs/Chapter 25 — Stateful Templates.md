@@ -35,7 +35,7 @@ Template renderer выполняет только compile-time конструк�
 Пример:
 
 ```forge
-public template func apply<T:struct>(defs: T): Void {
+public template apply<T:struct>(defs: T): Void {
     #{
         state.compiled = false
     #}
@@ -196,7 +196,7 @@ Forge runtime.
 
 Поддерживаемые конструкции:
 
-- `const` и `let`;
+- `const` и `var`;
 - assignment;
 - `if` / `else` внутри `#{...}`;
 - `for` внутри `#{...}`;
@@ -244,7 +244,7 @@ Graph.findCycle(graph: Dict<String, Array<String>>): Array<String>?
 Пример использования:
 
 ```forge
-public template func compile(): Void {
+public template compile(): Void {
     #{
         const cycle = Graph.findCycle(state.graph)
 
@@ -268,7 +268,7 @@ class
 #state graph: Dict<String, Array<String>> = {}
 #state compiled: Bool = false
 
-public template func apply<T:struct>(defs: T): Void {
+public template apply<T:struct>(defs: T): Void {
     #if state.compiled {
         Compiler.error("Cannot register services after DI compilation")
     #}
@@ -283,7 +283,7 @@ public template func apply<T:struct>(defs: T): Void {
     #}
 }
 
-public template func compile(): Void {
+public template compile(): Void {
     #{
         const cycle = Graph.findCycle(state.graph)
 

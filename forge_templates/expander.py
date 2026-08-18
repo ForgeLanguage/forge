@@ -20,6 +20,7 @@ from forge_parser import (
     CallExpression,
     ClassDeclaration,
     Expression,
+    FunctionDeclaration,
     IdentifierExpression,
     IndexExpression,
     MemberExpression,
@@ -47,6 +48,16 @@ class _TemplateFunction:
     results: str
     body: str
     modifiers: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _MethodSignature:
+    name: str
+    type_parameter: str | None
+    constraint: str | None
+    parameters: str
+    results: str
+    template: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,13 +163,24 @@ class _GraphClass:
 
 _TEMPLATE_HEADER = re.compile(
     r"(?P<prefix>(?:(?:public|internal|private|static|async|native)\s+)*)"
-    r"template\s+func\s+"
+    r"template\s+"
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"(?:\s*<\s*(?P<type_parameter>[A-Za-z_][A-Za-z0-9_]*)"
     r"\s*:\s*(?P<constraint>struct|class|interface|enum)\s*>)?"
     r"\s*\((?P<parameters>[^)]*)\)"
     r"\s*:\s*(?P<results>[^{]+?)"
     r"\s*\{",
+)
+
+_TEMPLATE_SIGNATURE = re.compile(
+    r"(?m)^(?P<indent>\s*)"
+    r"(?P<prefix>(?:(?:public|internal|private|static|async|native)\s+)*)"
+    r"template\s+"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?:\s*<\s*(?P<type_parameter>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\s*:\s*(?P<constraint>struct|class|interface|enum)\s*>)?"
+    r"\s*\((?P<parameters>[^)]*)\)"
+    r"\s*:\s*(?P<results>[^\n{]+?)\s*$",
 )
 
 _STATE_DECLARATION = re.compile(
@@ -202,6 +224,7 @@ def expand_template_sources(
     for source_name, stripped_source in stripped_by_name.items():
         structs.update(_collect_structs(stripped_source, source_name=source_name))
 
+    template_only_implements = _check_template_interface_contracts(stripped_by_name, templates)
     templates_by_key = {
         _template_key(template.owner, template.name): template
         for template in templates
@@ -217,7 +240,10 @@ def expand_template_sources(
 
     expanded: dict[str, str] = {}
     for source_name, stripped_source in stripped_by_name.items():
-        rewritten = stripped_source
+        rewritten = _strip_template_only_implements(
+            stripped_source,
+            template_only_implements.get(source_name, ()),
+        )
         folded_owner = _folded_owner(stripped_source, source_name)
         receiver_configs = _receiver_configurations(rewritten, stateful_owners)
         rewritten, stateful_fragments = _expand_stateful_template_calls(
@@ -284,6 +310,128 @@ def expand_template_sources(
             else rewritten
         )
     return expanded
+
+
+def _check_template_interface_contracts(
+    stripped_by_name: dict[str, str],
+    templates: list[_TemplateFunction],
+) -> dict[str, tuple[tuple[str, str], ...]]:
+    methods_by_owner: dict[str, dict[str, _MethodSignature]] = {}
+    interfaces_by_class: dict[str, tuple[str, ...]] = {}
+    source_by_class: dict[str, str] = {}
+    template_only: dict[str, list[tuple[str, str]]] = {}
+
+    for source_name, source in stripped_by_name.items():
+        try:
+            program = parse(source, source_name=source_name)
+        except SyntaxError as exc:
+            raise TemplateExpansionError(
+                f"Cannot parse source for template interface contracts: {exc}"
+            ) from exc
+        for declaration in program.declarations:
+            if not isinstance(declaration, ClassDeclaration) or declaration.name is None:
+                continue
+            source_by_class[declaration.name] = source_name
+            methods = methods_by_owner.setdefault(declaration.name, {})
+            for member in declaration.members:
+                if isinstance(member, FunctionDeclaration):
+                    methods[member.name] = _method_signature_from_function(member)
+            if declaration.kind != "interface" and declaration.implements:
+                interfaces_by_class[declaration.name] = tuple(
+                    _type_reference_source(interface) for interface in declaration.implements
+                )
+
+    for template in templates:
+        if template.owner is None:
+            continue
+        methods_by_owner.setdefault(template.owner, {})[template.name] = _method_signature_from_template(template)
+
+    for class_name, interfaces in interfaces_by_class.items():
+        class_methods = methods_by_owner.get(class_name, {})
+        for interface_name in interfaces:
+            required = methods_by_owner.get(interface_name.rsplit(".", 1)[-1], {})
+            used_template = False
+            for name, expected in required.items():
+                actual = class_methods.get(name)
+                if actual is None:
+                    raise TemplateExpansionError(
+                        f"Type {class_name} implements {interface_name} but is missing method '{name}'"
+                    )
+                if not _same_method_signature(actual, expected):
+                    raise TemplateExpansionError(
+                        f"Method '{name}' does not match interface {interface_name}"
+                    )
+                used_template = used_template or actual.template or expected.template
+            if used_template:
+                source_name = source_by_class[class_name]
+                template_only.setdefault(source_name, []).append((class_name, interface_name))
+
+    return {source_name: tuple(items) for source_name, items in template_only.items()}
+
+
+def _method_signature_from_template(template: _TemplateFunction) -> _MethodSignature:
+    return _MethodSignature(
+        template.name,
+        template.type_parameter,
+        template.constraint,
+        _normalize_signature_source(template.parameters),
+        _normalize_signature_source(template.results),
+        True,
+    )
+
+
+def _method_signature_from_function(function: FunctionDeclaration) -> _MethodSignature:
+    type_parameter = function.type_parameters[0] if function.type_parameters else None
+    return _MethodSignature(
+        function.name,
+        type_parameter.name if type_parameter is not None else None,
+        type_parameter.constraint if type_parameter is not None else None,
+        ", ".join(
+            f"{parameter.name}: {_type_reference_source(parameter.type)}"
+            for parameter in function.parameters
+        ),
+        _type_reference_source(function.return_type) if function.return_type is not None else "Void",
+        "template" in function.modifiers,
+    )
+
+
+def _same_method_signature(actual: _MethodSignature, expected: _MethodSignature) -> bool:
+    if (
+        actual.name != expected.name
+        or actual.constraint != expected.constraint
+        or actual.results != expected.results
+    ):
+        return False
+    actual_parameters = actual.parameters
+    expected_parameters = expected.parameters
+    if actual.type_parameter is not None and expected.type_parameter is not None:
+        actual_parameters = re.sub(rf"\b{re.escape(actual.type_parameter)}\b", expected.type_parameter, actual_parameters)
+        actual_result = re.sub(rf"\b{re.escape(actual.type_parameter)}\b", expected.type_parameter, actual.results)
+    else:
+        actual_result = actual.results
+    return (
+        actual.type_parameter is not None
+        if expected.type_parameter is not None
+        else actual.type_parameter is None
+    ) and actual_parameters == expected_parameters and actual_result == expected.results
+
+
+def _normalize_signature_source(source: str) -> str:
+    return re.sub(r"\s+", " ", source.strip())
+
+
+def _strip_template_only_implements(
+    source: str,
+    implements: tuple[tuple[str, str], ...],
+) -> str:
+    rewritten = source
+    for _class_name, interface_name in implements:
+        short_name = interface_name.rsplit(".", 1)[-1]
+        pattern = re.compile(
+            rf"(?m)^\s*implements\s+{re.escape(short_name)}\s*$"
+        )
+        rewritten = pattern.sub("", rewritten)
+    return rewritten
 
 
 def _ensure_use(source: str, path: str) -> str:
@@ -477,11 +625,11 @@ def _declared_value_names(source: str) -> set[str]:
     names = {
         match.group("name")
         for match in re.finditer(
-            r"(?m)^\s*(?:const|let)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
+            r"(?m)^\s*(?:const|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
             source,
         )
     }
-    for match in re.finditer(r"\bfunc\s+[A-Za-z_][A-Za-z0-9_]*\s*\((?P<parameters>[^)]*)\)", source):
+    for match in re.finditer(r"\b[A-Za-z_][A-Za-z0-9_]*\s*\((?P<parameters>[^)]*)\)\s*(?::|=>|\{)", source):
         for parameter in match.group("parameters").split(","):
             parameter = parameter.strip()
             if not parameter:
@@ -538,7 +686,7 @@ def _generate_stateful_function(
     else:
         results = template.results
     name = _generated_stateful_name(_template_key(template.owner, template.name), type_name, config_id)
-    return f"{modifiers}func {name}({parameters}): {results} {{\n{body}\n}}"
+    return f"{modifiers}{name}({parameters}): {results} {{\n{body}\n}}"
 
 
 def _generated_stateful_name(key: str, type_name: str | None, config_id: str) -> str:
@@ -577,12 +725,31 @@ def _extract_templates(
             )
         )
         cursor = body_end + 1
-    return "".join(chunks), tuple(templates)
+    stripped = "".join(chunks)
+
+    def replace_signature(match: re.Match[str]) -> str:
+        templates.append(
+            _TemplateFunction(
+                source_name or "<source>",
+                match.group("name"),
+                _template_owner(stripped, match.start(), source_name),
+                match.group("type_parameter"),
+                match.group("constraint"),
+                match.group("parameters").strip(),
+                match.group("results").strip(),
+                "",
+                tuple(part for part in match.group("prefix").split() if part),
+            )
+        )
+        return ""
+
+    stripped = _TEMPLATE_SIGNATURE.sub(replace_signature, stripped)
+    return stripped, tuple(templates)
 
 
 def _template_owner(source: str, match_start: int, source_name: str | None) -> str | None:
     for match in re.finditer(
-        r"\bclass\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)?\s*\{",
+        r"\b(?:class|struct|interface|trait)\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)?\s*\{",
         source,
     ):
         if match.start() >= match_start:
@@ -598,11 +765,11 @@ def _template_owner(source: str, match_start: int, source_name: str | None) -> s
             if source_name is not None:
                 return source_name.rsplit("/", 1)[-1].removesuffix(".forge")
     prefix = source[:match_start]
-    if re.search(r"\bclass\b\s*(?:\n|\r\n|\{|$)", prefix):
+    if re.search(r"\b(?:class|struct|interface|trait)\b\s*(?:\n|\r\n|\{|$)", prefix):
         if source_name is None:
             return None
         return source_name.rsplit("/", 1)[-1].removesuffix(".forge")
-    match = re.search(r"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{[^{}]*$", prefix, re.S)
+    match = re.search(r"\b(?:class|struct|interface|trait)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{[^{}]*$", prefix, re.S)
     if match is not None:
         return match.group(1)
     return None
@@ -784,7 +951,7 @@ def _generate_function(
     parameters = _replace_type_parameter(template.parameters, template.type_parameter, type_name)
     results = _replace_type_parameter(template.results, template.type_parameter, type_name)
     body = _expand_body(template, type_name, properties, structs)
-    return f"{modifiers}func {name}({parameters}): {results} {{\n{body}\n}}"
+    return f"{modifiers}{name}({parameters}): {results} {{\n{body}\n}}"
 
 
 def _generate_nongeneric_function(template: _TemplateFunction) -> str:
@@ -792,7 +959,7 @@ def _generate_nongeneric_function(template: _TemplateFunction) -> str:
     if modifiers:
         modifiers += " "
     body = _expand_body(template, None, (), {})
-    return f"{modifiers}func {template.name}({template.parameters}): {template.results} {{\n{body}\n}}"
+    return f"{modifiers}{template.name}({template.parameters}): {template.results} {{\n{body}\n}}"
 
 
 def _expand_body(
@@ -999,7 +1166,7 @@ def _execute_compile_time_block(
         if not line:
             index += 1
             continue
-        if line.startswith("const ") or line.startswith("let "):
+        if line.startswith("const ") or line.startswith("var "):
             keyword, rest = line.split(" ", 1)
             if "=" not in rest:
                 raise TemplateExpansionError(f"Expected initializer for compile-time {keyword}")

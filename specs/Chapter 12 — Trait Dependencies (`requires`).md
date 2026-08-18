@@ -12,7 +12,7 @@
 
 ```forge
 trait Logger {
-    public func log(message: String): Void {
+    public log(message: String): Void {
         print "[LOG] " + message
     }
 }
@@ -26,7 +26,7 @@ trait Greeter {
 
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         this.Logger.log("Greeting " + this.name)
         print "Hello, " + this.name + "!"
     }
@@ -70,7 +70,7 @@ uses Logger
 
 ```forge
 trait HttpHandler {
-    requires public func HttpHandlerInterface.match(String): Bool
+    requires public HttpHandlerInterface.match(String): Bool
 }
 ```
 
@@ -82,7 +82,7 @@ trait HttpHandler {
 
 ```forge
 trait Logger {
-    public func log(message: String): Void {
+    public log(message: String): Void {
         print "[LOG] " + message
     }
 }
@@ -92,7 +92,7 @@ trait Greeter {
 
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         this.Logger.log("Greeting " + this.name)
         print "Hello, " + this.name + "!"
     }
@@ -102,7 +102,7 @@ class
 uses Greeter
 uses Logger
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: App = App.new("Forge")
     app.run()
 }
@@ -111,7 +111,7 @@ public new(name: String) {
     this.Greeter.name = name
 }
 
-public func run(): Void {
+public run(): Void {
     this.Greeter.greet()
 }
 ```

@@ -36,7 +36,7 @@ public name: String
 ```forge
 class
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const g: Greeter = Greeter.new("Forge")
 }
 ```
@@ -124,7 +124,7 @@ var.callAnotherMethod()
 ## Доступ внутри класса
 
 ```
-public func rename(newName: String): Void {
+public rename(newName: String): Void {
     this.name = newName  
 }
 ```
@@ -287,7 +287,7 @@ public static count: Int = 0
 ## Static функция
 
 ```forge
-public static func version(): String {
+public static version(): String {
     return "1.0"
 }
 ```
@@ -385,11 +385,11 @@ class Point
 
 public new(public x: Int, public y: Int) {}
 
-public static func origin(): self {
+public static origin(): self {
     return self.new(0, 0)
 }
 
-public func same(other: self): self {
+public same(other: self): self {
     return other
 }
 ```
