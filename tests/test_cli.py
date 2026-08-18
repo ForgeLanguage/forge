@@ -130,6 +130,61 @@ class ForgeCliTests(unittest.TestCase):
 
             self.assertEqual(output.read_text(), "int value = 7;\n")
 
+    def test_expand_writes_expanded_source_to_stdout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.forge"
+            source.write_text(
+                """
+public template answer(): Int {
+    return 42
+}
+
+const value = answer()
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "expand", str(source)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+        self.assertIn("public answer(): Int", result.stdout)
+        self.assertIn("const value = answer()", result.stdout)
+        self.assertNotIn("template answer", result.stdout)
+        self.assertEqual(result.stderr, "")
+
+    def test_expand_project_writes_expanded_sources_to_output_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "expanded"
+            (root / "src").mkdir()
+            (root / "src" / "main.forge").write_text(
+                """
+public template answer(): Int {
+    return 42
+}
+
+const value = answer()
+"""
+            )
+
+            subprocess.run(
+                [str(FORGE), "expand", str(root), "-o", str(output)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            expanded = (output / "main.forge").read_text()
+
+        self.assertIn("public answer(): Int", expanded)
+        self.assertIn("const value = answer()", expanded)
+        self.assertNotIn("template answer", expanded)
+
     @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
     def test_compile_generates_c_and_binary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

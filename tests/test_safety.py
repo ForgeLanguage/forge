@@ -353,6 +353,21 @@ class User {
 
         self.assertTrue(result.ok)
 
+    def test_allows_field_initializer_for_non_nullable_owned_field(self) -> None:
+        program = parse(
+            """
+@multidef
+class Profile {}
+class User {
+    public take profile: Profile = Profile.new()
+}
+"""
+        )
+
+        result = check_safety(program)
+
+        self.assertTrue(result.ok)
+
     def test_nullable_owned_field_does_not_require_constructor_initialization(self) -> None:
         program = parse(
             """

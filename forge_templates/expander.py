@@ -16,18 +16,36 @@ from forge_parser import (
     ArrayLiteralExpression,
     AssignmentExpression,
     BinaryExpression,
+    BlockStatement,
     BulkCallExpression,
     CallExpression,
     ClassDeclaration,
+    ConditionalExpression,
+    Declaration,
+    DoWhileExpression,
+    DoWhileStatement,
     Expression,
+    ExpressionStatement,
+    ForExpression,
+    ForStatement,
     FunctionDeclaration,
     IdentifierExpression,
+    IfStatement,
     IndexExpression,
     MemberExpression,
     LiteralExpression,
+    MoveExpression,
+    PrintStatement,
+    Program,
+    ReturnStatement,
+    Statement,
+    SwitchStatement,
+    ThisExpression,
     TypeReference,
     UnaryExpression,
     VariableDeclaration,
+    WhileExpression,
+    WhileStatement,
     parse,
     parse_expression,
 )
@@ -225,6 +243,7 @@ def expand_template_sources(
         structs.update(_collect_structs(stripped_source, source_name=source_name))
 
     template_only_implements = _check_template_interface_contracts(stripped_by_name, templates)
+    install_methods = _collect_install_binding_methods(stripped_by_name)
     templates_by_key = {
         _template_key(template.owner, template.name): template
         for template in templates
@@ -244,8 +263,11 @@ def expand_template_sources(
             stripped_source,
             template_only_implements.get(source_name, ()),
         )
+        rewritten = _strip_install_binding_bodies(rewritten)
         folded_owner = _folded_owner(stripped_source, source_name)
-        receiver_configs = _receiver_configurations(rewritten, stateful_owners)
+        receiver_configs = _receiver_configurations(rewritten, stateful_owners, source_name=source_name)
+        rewritten = _expand_install_binding_calls(rewritten, install_methods)
+        rewritten = _rewrite_stateful_constructor_receivers(rewritten, receiver_configs)
         rewritten, stateful_fragments = _expand_stateful_template_calls(
             rewritten,
             {**templates_by_key, **nongeneric_templates_by_key},
@@ -304,12 +326,46 @@ def expand_template_sources(
                 ]
         if generated and any("JsonValue" in fragment for fragment in generated):
             rewritten = _ensure_use(rewritten, "std.Json.JsonValue")
+        top_level_generated = [
+            fragment for fragment in generated if fragment.startswith("class DiContainer__")
+        ]
+        tail_generated = [
+            fragment for fragment in generated if not fragment.startswith("class DiContainer__")
+        ]
+        if top_level_generated:
+            rewritten = _prepend_generated_top_level(
+                rewritten,
+                "\n\n".join(top_level_generated),
+            )
+            rewritten = _ensure_multidef(rewritten, source_name)
         expanded[source_name] = (
-            rewritten.rstrip() + "\n\n" + "\n\n".join(generated) + "\n"
-            if generated
+            rewritten.rstrip() + "\n\n" + "\n\n".join(tail_generated) + "\n"
+            if tail_generated
             else rewritten
         )
     return expanded
+
+
+def _prepend_generated_top_level(source: str, generated: str) -> str:
+    match = re.search(r"(?m)^\s*(?:public|private|internal)?\s*class\b", source)
+    if match is None:
+        return generated.rstrip() + "\n\n" + source
+    return source[: match.start()] + generated.rstrip() + "\n\n" + source[match.start() :]
+
+
+def _ensure_multidef(source: str, source_name: str) -> str:
+    owner = source_name.rsplit("/", 1)[-1].removesuffix(".forge")
+    source, replacements = re.subn(
+        r"(?m)^(\s*(?:public|private|internal)?\s*class)\s*$",
+        rf"\1 {owner} {{",
+        source,
+        count=1,
+    )
+    if replacements:
+        source = source.rstrip() + "\n}\n"
+    if re.match(r"\s*@multidef\b", source):
+        return source
+    return "@multidef\n" + source
 
 
 def _check_template_interface_contracts(
@@ -434,6 +490,130 @@ def _strip_template_only_implements(
     return rewritten
 
 
+@dataclass(frozen=True, slots=True)
+class _InstallBindingMethod:
+    owner: str
+    parameter: str
+    body: str
+
+
+@dataclass(frozen=True, slots=True)
+class _StatefulCallMatch:
+    start: int
+    end: int
+    receiver: str
+    method: str
+    type_name: str | None
+    space: str
+    open: str
+
+
+def _collect_install_binding_methods(
+    sources: dict[str, str],
+) -> dict[str, _InstallBindingMethod]:
+    methods: dict[str, _InstallBindingMethod] = {}
+    for source_name, source in sources.items():
+        owner = source_name.rsplit("/", 1)[-1].removesuffix(".forge")
+        class_match = re.search(r"\bclass\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)?\s*\{", source)
+        if class_match is not None:
+            owner = class_match.group("name") or owner
+        pattern = re.compile(
+            r"\b(?:public|private|internal)?\s*"
+            r"installBindings\s*\(\s*"
+            r"(?P<parameter>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*WriteOnlyDiContainerInterface\s*"
+            r"\)\s*(?::\s*Void\s*)?\{",
+        )
+        match = pattern.search(source)
+        if match is None:
+            continue
+        body_start = match.end()
+        body_end = _matching_brace(source, body_start - 1)
+        methods[owner] = _InstallBindingMethod(
+            owner,
+            match.group("parameter"),
+            source[body_start:body_end],
+        )
+    return methods
+
+
+def _expand_install_binding_calls(
+    source: str,
+    install_methods: dict[str, _InstallBindingMethod],
+) -> str:
+    receiver_types: dict[str, str] = {}
+    for match in re.finditer(
+        r"(?m)^\s*const\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+        r"(?:\s*:[^=\n]+)?\s*=\s*"
+        r"(?P<type>[A-Za-z_][A-Za-z0-9_.]*)\.new\s*\([^)]*\)\s*$",
+        source,
+    ):
+        receiver_types[match.group("name")] = match.group("type").rsplit(".", 1)[-1]
+
+    pattern = re.compile(
+        r"(?P<indent>^[ \t]*)"
+        r"(?P<receiver>[A-Za-z_][A-Za-z0-9_]*)\.installBindings\s*"
+        r"\(\s*(?P<container>(?:this\.)?[A-Za-z_][A-Za-z0-9_]*)\s*\)",
+        re.M,
+    )
+
+    def replacement(match: re.Match[str]) -> str:
+        owner = receiver_types.get(match.group("receiver"))
+        if owner is None:
+            return match.group(0)
+        method = install_methods.get(owner)
+        if method is None:
+            return match.group(0)
+        return _inline_install_binding_body(
+            method,
+            match.group("container"),
+            match.group("indent"),
+        )
+
+    return pattern.sub(replacement, source)
+
+
+def _strip_install_binding_bodies(source: str) -> str:
+    pattern = re.compile(
+        r"\b(?P<prefix>(?:public|private|internal)?\s*"
+        r"installBindings\s*\(\s*"
+        r"[A-Za-z_][A-Za-z0-9_]*\s*:\s*WriteOnlyDiContainerInterface\s*"
+        r"\)\s*(?::\s*Void\s*)?)\{",
+    )
+    chunks: list[str] = []
+    cursor = 0
+    while True:
+        match = pattern.search(source, cursor)
+        if match is None:
+            chunks.append(source[cursor:])
+            break
+        body_end = _matching_brace(source, match.end() - 1)
+        chunks.append(source[cursor:match.start()])
+        chunks.append(match.group("prefix") + "{}")
+        cursor = body_end + 1
+    return "".join(chunks)
+
+
+def _inline_install_binding_body(
+    method: _InstallBindingMethod,
+    container_expression: str,
+    indent: str,
+) -> str:
+    output: list[str] = []
+    for raw_line in method.body.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        line = re.sub(
+            rf"\b{re.escape(method.parameter)}\.",
+            f"{container_expression}.",
+            stripped,
+        )
+        line = line.replace("this.defs()", f"{method.owner}.defs()")
+        line = line.replace("self.defs()", f"{method.owner}.defs()")
+        output.append(indent + line)
+    return "\n".join(output)
+
+
 def _ensure_use(source: str, path: str) -> str:
     line = f"use {path}"
     if re.search(rf"^\s*{re.escape(line)}\s*$", source, re.M):
@@ -513,9 +693,32 @@ def _sync_state_from_context(context: dict[str, object], state: dict[str, object
         state.update(vars(state_object))
 
 
-def _receiver_configurations(source: str, stateful_owners: set[str]) -> dict[str, tuple[str, str]]:
+def _receiver_configurations(
+    source: str,
+    stateful_owners: set[str],
+    *,
+    source_name: str,
+) -> dict[str, tuple[str, str]]:
     configs: dict[str, tuple[str, str]] = {}
     counters: dict[str, int] = {}
+    source_owner = source_name.rsplit("/", 1)[-1].removesuffix(".forge")
+    field_pattern = re.compile(
+        r"^\s*(?:public|private|internal)?\s*"
+        r"(?!(?:const|let|var)\b)"
+        r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+        r"(?:\s*:[^=\n]+)?\s*=\s*(?P<expr>[^\n]+)$",
+        re.M,
+    )
+    for match in field_pattern.finditer(source):
+        name = match.group("name")
+        expression = match.group("expr").strip()
+        new_match = re.fullmatch(r"(?P<owner>[A-Za-z_][A-Za-z0-9_.]*)\.new\s*\([^)]*\)", expression)
+        if new_match is None:
+            continue
+        owner = new_match.group("owner").rsplit(".", 1)[-1]
+        if owner in stateful_owners:
+            configs[f"this.{name}"] = (owner, f"{source_owner}.{name}")
+            configs[name] = (owner, f"{source_owner}.{name}")
     pattern = re.compile(
         r"^\s*const\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
         r"(?:\s*:[^=]+)?\s*=\s*(?P<expr>[^\n]+)$",
@@ -544,6 +747,31 @@ def _receiver_configurations(source: str, stateful_owners: set[str]) -> dict[str
     return configs
 
 
+def _rewrite_stateful_constructor_receivers(
+    source: str,
+    receiver_configs: dict[str, tuple[str, str]],
+) -> str:
+    rewritten = source
+    for receiver, (owner, config_id) in sorted(receiver_configs.items(), key=lambda item: len(item[0]), reverse=True):
+        if owner != "DiContainer":
+            continue
+        concrete_type = _di_container_type_name(config_id)
+        if receiver.startswith("this."):
+            field = receiver.removeprefix("this.")
+            rewritten = re.sub(
+                rf"(?m)^(\s*(?:public|private|internal)?\s*{re.escape(field)}(?:\s*:[^=]+)?\s*=\s*){re.escape(owner)}\.new\s*\(",
+                rf"\1{concrete_type}.new(",
+                rewritten,
+            )
+        else:
+            rewritten = re.sub(
+                rf"(?m)^(\s*const\s+{re.escape(receiver)}(?:\s*:[^=]+)?\s*=\s*){re.escape(owner)}\.new\s*\(",
+                rf"\1{concrete_type}.new(",
+                rewritten,
+            )
+    return rewritten
+
+
 def _expand_stateful_template_calls(
     source: str,
     templates_by_key: dict[str, _TemplateFunction],
@@ -555,20 +783,16 @@ def _expand_stateful_template_calls(
 ) -> tuple[str, list[str]]:
     generated: list[str] = []
     generated_names: set[str] = set()
+    generated_di_methods: dict[str, list[str]] = {}
+    generated_di_method_names: set[tuple[str, str]] = set()
     states: dict[tuple[str, str], dict[str, object]] = {}
-    pattern = re.compile(
-        r"\b(?P<receiver>[A-Za-z_][A-Za-z0-9_]*)\."
-        r"(?P<method>[A-Za-z_][A-Za-z0-9_]*)"
-        r"(?:\s*<\s*(?P<type>[A-Za-z_][A-Za-z0-9_.]*)\s*>)?"
-        r"(?P<space>\s*)(?P<open>[\(\[])"
-    )
     runtime_ranges = _runtime_control_ranges(source)
     declared_names = _declared_value_names(source)
 
-    def replacement(match: re.Match[str]) -> str:
-        receiver = match.group("receiver")
+    def replacement(match: _StatefulCallMatch) -> str:
+        receiver = match.receiver
         config = receiver_configs.get(receiver)
-        method = match.group("method")
+        method = match.method
         if config is None:
             if any(
                 key.endswith(f".{method}") and key.rsplit(".", 1)[0] in states_by_owner
@@ -576,34 +800,55 @@ def _expand_stateful_template_calls(
                 if "." in key
             ):
                 if receiver not in declared_names:
-                    return match.group(0)
+                    return source[match.start : match.end]
                 raise TemplateExpansionError(_UNKNOWN_RECEIVER_CONFIG)
-            return match.group(0)
+            return source[match.start : match.end]
         owner, config_id = config
         key = _template_key(owner, method)
         template = templates_by_key.get(key)
         if template is None:
-            return match.group(0)
-        if any(start <= match.start() < end for start, end in runtime_ranges):
+            return source[match.start : match.end]
+        if any(start <= match.start < end for start, end in runtime_ranges):
             raise TemplateExpansionError(
                 "State-changing template invocation must be in compile-time deterministic control flow."
             )
         state_key = (owner, config_id)
         state = states.setdefault(state_key, _clone_state(states_by_owner[owner]))
-        type_name = match.group("type")
+        type_name = match.type_name
         if template.type_parameter is not None and type_name is None:
-            return match.group(0)
+            return source[match.start : match.end]
         if template.type_parameter is None and type_name is not None:
-            return match.group(0)
+            return source[match.start : match.end]
         invocation = TemplateInvocationContext(
             receiver,
             config_id,
             (type_name,) if type_name is not None else (),
             source_name,
-            match.start(),
+            match.start,
         )
         state["context"] = invocation
         properties = _properties_for(type_name, template, structs) if type_name is not None else ()
+        if owner == "DiContainer":
+            concrete_type = _di_container_type_name(config_id)
+            method_name = _di_method_name(method, type_name)
+            output_receiver = receiver
+            if "." not in receiver and f"this.{receiver}" in receiver_configs:
+                output_receiver = f"this.{receiver}"
+            fragment = _generate_stateful_function(
+                template,
+                type_name,
+                properties,
+                structs,
+                state,
+                config_id,
+                name_override=method_name,
+                include_func_keyword=False,
+            )
+            method_key = (concrete_type, method_name)
+            if method_key not in generated_di_method_names:
+                generated_di_methods.setdefault(concrete_type, []).append(fragment)
+                generated_di_method_names.add(method_key)
+            return f"{output_receiver}.{method_name}{match.space}{match.open}"
         generated_name = _generated_stateful_name(key, type_name, config_id)
         fragment = _generate_stateful_function(
             template,
@@ -616,9 +861,124 @@ def _expand_stateful_template_calls(
         if fragment and generated_name not in generated_names:
             generated.append(fragment)
             generated_names.add(generated_name)
-        return f"{generated_name}{match.group('space')}{match.group('open')}"
+        return f"{generated_name}{match.space}{match.open}"
 
-    return pattern.sub(replacement, source), generated
+    matches = _stateful_call_matches_from_ast(source)
+    chunks: list[str] = []
+    cursor = 0
+    for match in matches:
+        chunks.append(source[cursor : match.start])
+        chunks.append(replacement(match))
+        cursor = match.end
+    chunks.append(source[cursor:])
+    rewritten = "".join(chunks)
+    for concrete_type, methods in generated_di_methods.items():
+        generated.append(
+            f"class {concrete_type} {{\n    public new() {{}}\n\n"
+            + "\n\n".join(_indent_block(method, "    ") for method in methods)
+            + "\n}"
+        )
+    return rewritten, generated
+
+
+def _is_in_line_comment(source: str, index: int) -> bool:
+    line_start = source.rfind("\n", 0, index) + 1
+    comment_start = source.find("//", line_start, index)
+    if comment_start == -1:
+        return False
+    return source.count('"', line_start, comment_start) % 2 == 0
+
+
+def _stateful_call_matches_from_ast(source: str) -> list[_StatefulCallMatch]:
+    try:
+        program = parse(source)
+    except SyntaxError:
+        return []
+    matches: list[_StatefulCallMatch] = []
+    for expression in _walk_expressions(program):
+        if not isinstance(expression, CallExpression):
+            continue
+        if not isinstance(expression.callee, MemberExpression):
+            continue
+        receiver = _receiver_source(expression.callee.receiver)
+        if receiver is None:
+            continue
+        match = _stateful_call_match_at(source, expression.location.offset, receiver)
+        if match is not None:
+            matches.append(match)
+    return sorted(matches, key=lambda item: item.start)
+
+
+def _receiver_source(expression: Expression) -> str | None:
+    if isinstance(expression, IdentifierExpression):
+        return expression.name
+    if (
+        isinstance(expression, MemberExpression)
+        and isinstance(expression.receiver, ThisExpression)
+    ):
+        return f"this.{expression.member}"
+    return None
+
+
+def _stateful_call_match_at(
+    source: str,
+    offset: int,
+    receiver: str,
+) -> _StatefulCallMatch | None:
+    pattern = re.compile(
+        rf"{re.escape(receiver)}\."
+        r"(?P<method>[A-Za-z_][A-Za-z0-9_]*)"
+        r"(?:\s*<\s*(?P<type>[A-Za-z_][A-Za-z0-9_.]*)\s*>)?"
+        r"(?P<space>\s*)(?P<open>[\(\[])"
+    )
+    match = pattern.match(source, offset)
+    if match is None:
+        return None
+    return _StatefulCallMatch(
+        offset,
+        match.end(),
+        receiver,
+        match.group("method"),
+        match.group("type"),
+        match.group("space"),
+        match.group("open"),
+    )
+
+
+def _walk_expressions(node: object) -> list[Expression]:
+    expressions: list[Expression] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, Expression):
+            expressions.append(value)
+        if isinstance(value, (str, int, float, bool, type(None), TokenKind)):
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                visit(item)
+            return
+        if hasattr(value, "__dataclass_fields__"):
+            for field in value.__dataclass_fields__:
+                if field == "location":
+                    continue
+                visit(getattr(value, field))
+
+    visit(node)
+    return expressions
+
+
+def _di_container_type_name(config_id: str) -> str:
+    return "DiContainer__" + re.sub(r"[^0-9A-Za-z_]", "_", config_id)
+
+
+def _di_method_name(method: str, type_name: str | None) -> str:
+    if type_name is None:
+        return method
+    return f"{method}__{_type_suffix(type_name)}"
+
+
+def _indent_block(source: str, indent: str) -> str:
+    return "\n".join(indent + line if line else line for line in source.splitlines())
 
 
 def _declared_value_names(source: str) -> set[str]:
@@ -673,6 +1033,8 @@ def _generate_stateful_function(
     structs: dict[str, _TypeShape],
     state: dict[str, object],
     config_id: str,
+    name_override: str | None = None,
+    include_func_keyword: bool = True,
 ) -> str:
     body = _expand_stateful_body(template, type_name, properties, structs, state)
     modifier_parts = [mod for mod in template.modifiers if mod != "template"]
@@ -685,8 +1047,9 @@ def _generate_stateful_function(
         results = _replace_type_parameter(template.results, template.type_parameter, type_name)
     else:
         results = template.results
-    name = _generated_stateful_name(_template_key(template.owner, template.name), type_name, config_id)
-    return f"{modifiers}{name}({parameters}): {results} {{\n{body}\n}}"
+    name = name_override or _generated_stateful_name(_template_key(template.owner, template.name), type_name, config_id)
+    func_keyword = "func " if include_func_keyword else ""
+    return f"{modifiers}{func_keyword}{name}({parameters}): {results} {{\n{body}\n}}"
 
 
 def _generated_stateful_name(key: str, type_name: str | None, config_id: str) -> str:
@@ -1691,6 +2054,10 @@ def _eval_member(receiver: object, member: str, structs: dict[str, _TypeShape]) 
         return receiver.implementations
     if isinstance(receiver, _TypeInfo) and member == "arguments":
         return receiver.arguments
+    if isinstance(receiver, _TypeInfo) and member == "serviceType":
+        if receiver.name.split("<", 1)[0].rsplit(".", 1)[-1] == "Definition" and receiver.arguments:
+            return receiver.arguments[0]
+        return receiver
     if isinstance(receiver, _TypeInfo) and member == "isArray":
         return receiver.is_array
     if isinstance(receiver, _TypeInfo) and member == "isNullable":

@@ -10,7 +10,9 @@ import subprocess
 import sys
 
 from forge_c import emit_c, emit_c_project
+from forge_modules import ExpandedSource, expand_project_sources
 from forge_parser import parse
+from forge_templates import expand_templates
 
 
 BUILD_DIR = Path(os.environ.get("FORGE_BUILD_DIR", ".forge-build"))
@@ -34,6 +36,9 @@ def main(argv: list[str] | None = None) -> int:
         if command == "translate":
             command_translate(args)
             return 0
+        if command == "expand":
+            command_expand(args)
+            return 0
         if command == "compile":
             command_compile(args)
             return 0
@@ -56,11 +61,13 @@ def usage(stream) -> None:
     stream.write(
         """Usage:
   forge translate <source.forge> [-o output.c]
+  forge expand    <source-or-project> [-o output-file-or-dir]
   forge compile   <source-or-project> [-o output-binary] [--c-out output-dir]
   forge run       <source-or-project> [-- program-args...]
 
 Commands:
   translate  Generate C source.
+  expand     Generate Forge source after template expansion.
   compile    Generate one C source per Forge project file and compile with optimizations.
   run        Generate one C source per Forge project file, compile without optimizations, and run.
 
@@ -96,6 +103,33 @@ def command_translate(args: list[str]) -> None:
     if not source:
         raise ForgeCliError("translate requires a source file")
     emit_c_file(Path(source), Path(output) if output else None)
+
+
+def command_expand(args: list[str]) -> None:
+    source = ""
+    output = ""
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in {"-o", "--output"}:
+            index += 1
+            if index >= len(args):
+                raise ForgeCliError("missing value for -o")
+            output = args[index]
+        elif arg in {"-h", "--help"}:
+            usage(sys.stdout)
+            return
+        elif arg.startswith("-"):
+            raise ForgeCliError(f"unknown option for expand: {arg}")
+        else:
+            if source:
+                raise ForgeCliError("expand accepts one source or project")
+            source = arg
+        index += 1
+
+    if not source:
+        raise ForgeCliError("expand requires a source file or project")
+    expand_source(Path(source), Path(output) if output else None)
 
 
 def command_compile(args: list[str]) -> None:
@@ -172,6 +206,55 @@ def emit_c_file(source_path: Path, output: Path | None) -> None:
         return
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(c_source)
+
+
+def expand_source(source_path: Path, output: Path | None) -> None:
+    if not source_path.is_file() and not source_path.is_dir():
+        raise ForgeCliError(f"source file or project not found: {source_path}")
+    if source_path.is_file() and source_path.name != "forge.toml":
+        expanded = expand_templates(
+            source_path.read_text(),
+            source_name=source_path.as_posix(),
+        )
+        write_expanded_single(expanded, output)
+        return
+
+    try:
+        expanded_sources, diagnostics = expand_project_sources(source_path)
+    except Exception as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from exc
+    if diagnostics:
+        print(format_module_diagnostics(diagnostics), file=sys.stderr)
+        raise SystemExit(1)
+    write_expanded_project(expanded_sources, output)
+
+
+def write_expanded_single(source: str, output: Path | None) -> None:
+    if output is None:
+        sys.stdout.write(source)
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(source)
+
+
+def write_expanded_project(sources: tuple[ExpandedSource, ...], output: Path | None) -> None:
+    if output is None:
+        for index, source in enumerate(sources):
+            if index:
+                sys.stdout.write("\n")
+            sys.stdout.write(f"// source: {source.source_name}\n")
+            sys.stdout.write(source.source)
+        return
+    output.mkdir(parents=True, exist_ok=True)
+    for source in sources:
+        destination = output / source.source_name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source.source)
+
+
+def format_module_diagnostics(diagnostics) -> str:
+    return "\n".join(f"{diagnostic.path}: {diagnostic.message}" for diagnostic in diagnostics)
 
 
 def compile_project(source_path: Path, binary: Path, c_output: Path, mode: str) -> None:

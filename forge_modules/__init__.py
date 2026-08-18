@@ -1,6 +1,7 @@
 """Project/module loading for multi-file Forge programs."""
 
 from .project import (
+    ExpandedSource,
     ModuleDiagnostic,
     ModuleSymbol,
     NativeMetadata,
@@ -9,10 +10,12 @@ from .project import (
     ProjectManifest,
     ProjectPackage,
     SourceFile,
+    expand_project_sources,
     load_project,
 )
 
 __all__ = [
+    "ExpandedSource",
     "ModuleDiagnostic",
     "ModuleSymbol",
     "NativeMetadata",
@@ -21,5 +24,6 @@ __all__ = [
     "ProjectManifest",
     "ProjectPackage",
     "SourceFile",
+    "expand_project_sources",
     "load_project",
 ]

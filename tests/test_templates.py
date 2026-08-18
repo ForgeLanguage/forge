@@ -524,16 +524,117 @@ const workerLogger = worker.resolve<WorkerLogger>()
         )
 
         main = expanded["main.forge"]
-        self.assertIn("DiContainer_apply__AppDefs__Config_1(appDefs)", main)
-        self.assertIn("DiContainer_build__nongeneric__Config_1()", main)
-        self.assertIn("DiContainer_resolve__Logger__Config_1()", main)
-        self.assertIn("DiContainer_resolve__Service__Config_1()", main)
-        self.assertIn("DiContainer_apply__WorkerDefs__Config_2(workerDefs)", main)
-        self.assertIn("DiContainer_build__nongeneric__Config_2()", main)
-        self.assertIn("DiContainer_resolve__WorkerLogger__Config_2()", main)
-        self.assertIn("DiContainer_resolve__Logger__Config_1(): Logger", main)
+        self.assertIn("const app = DiContainer__Config_1.new()", main)
+        self.assertIn("app.apply__AppDefs(appDefs)", main)
+        self.assertIn("app.build()", main)
+        self.assertIn("app.resolve__Logger()", main)
+        self.assertIn("app.resolve__Service()", main)
+        self.assertIn("const worker = DiContainer__Config_2.new()", main)
+        self.assertIn("worker.apply__WorkerDefs(workerDefs)", main)
+        self.assertIn("worker.build()", main)
+        self.assertIn("worker.resolve__WorkerLogger()", main)
+        self.assertIn("class DiContainer__Config_1", main)
+        self.assertIn("public resolve__Logger(): Logger", main)
         self.assertIn("return Logger.new(", main)
         self.assertIn("return Service.new(move Logger.new())", main)
+
+    def test_di_container_field_receiver_generates_specialized_container_type(self) -> None:
+        expanded = expand_template_sources(
+            (
+                ("stdlib/std/src/Di/DiContainer.forge", DI_CONTAINER_SOURCE),
+                (
+                    "Engine.forge",
+                    """
+@multidef
+struct Definition<T> {}
+
+struct AppDefs {
+    public logger: Definition<Logger>
+}
+
+class Logger {}
+
+class Engine {
+    private app = DiContainer.new()
+
+    public init(): Void {
+        const defs: AppDefs = {}
+        this.app.apply<AppDefs>(defs)
+        this.app.build()
+    }
+
+    public run(): Void {
+        const logger = this.app.resolve<Logger>()
+    }
+}
+""",
+                ),
+            )
+        )
+
+        source = expanded["Engine.forge"]
+        self.assertIn("private app = DiContainer__Engine_app.new()", source)
+        self.assertIn("this.app.apply__AppDefs(defs)", source)
+        self.assertIn("this.app.build()", source)
+        self.assertIn("this.app.resolve__Logger()", source)
+        self.assertIn("class DiContainer__Engine_app", source)
+        self.assertIn("public resolve__Logger(): Logger", source)
+
+    def test_di_container_apply_accepts_direct_service_fields(self) -> None:
+        expanded = expand_template_sources(
+            (
+                ("stdlib/std/src/Di/DiContainer.forge", DI_CONTAINER_SOURCE),
+                (
+                    "main.forge",
+                    """
+@multidef
+struct AppDefs {
+    public sceneManager: SceneManager
+}
+
+class SceneManager {}
+
+const app = DiContainer.new()
+const defs: AppDefs = { sceneManager: {} }
+app.apply<AppDefs>(defs)
+app.build()
+const sceneManager = app.resolve<SceneManager>()
+""",
+                ),
+            )
+        )
+
+        main = expanded["main.forge"]
+        self.assertIn("app.apply__AppDefs(defs)", main)
+        self.assertIn("app.resolve__SceneManager()", main)
+        self.assertIn("public resolve__SceneManager(): SceneManager", main)
+
+    def test_stateful_template_ignores_calls_in_line_comments(self) -> None:
+        expanded = expand_template_sources(
+            (
+                ("stdlib/std/src/Di/DiContainer.forge", DI_CONTAINER_SOURCE),
+                (
+                    "main.forge",
+                    """
+@multidef
+struct AppDefs {
+    public sceneManager: SceneManager
+}
+
+class SceneManager {}
+
+const app = DiContainer.new()
+const defs: AppDefs = { sceneManager: {} }
+app.apply<AppDefs>(defs)
+app.build()
+const sceneManager = app.resolve<SceneManager>()
+// const loop = app.resolve<Loop>()
+""",
+                ),
+            )
+        )
+
+        self.assertIn("// const loop = app.resolve<Loop>()", expanded["main.forge"])
 
     def test_di_container_build_reports_missing_dependency(self) -> None:
         with self.assertRaisesRegex(TemplateExpansionError, "Missing dependency for Service: Logger"):

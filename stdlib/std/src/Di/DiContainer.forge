@@ -20,7 +20,8 @@ public template apply<T:struct>(defs: T): Void {
 
     #for Reflection.type<T>().fields as field {
         #{
-            const service = field.type.arguments[0].name
+            const serviceType = field.type.serviceType
+            const service = serviceType.name
 
             if state.defs.contains(service) {
                 Compiler.error("Service already registered: #{service}")
@@ -29,7 +30,7 @@ public template apply<T:struct>(defs: T): Void {
             state.defs[service] = true
             state.graph[service] = []
 
-            for parameter in field.type.arguments[0].constructor.parameters {
+            for parameter in serviceType.constructor.parameters {
                 if parameter.type.isSimple == false {
                     state.graph[service].add(parameter.type.name)
                 }

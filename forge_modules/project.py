@@ -85,6 +85,15 @@ class SourceFile:
 
 
 @dataclass(frozen=True, slots=True)
+class ExpandedSource:
+    path: Path
+    relative_path: Path
+    source_name: str
+    source: str
+    package: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class _SourceInput:
     path: Path
     relative_path: Path
@@ -171,6 +180,62 @@ def load_project(root: str | Path, *, src_dir: str = "src") -> Project:
         dependencies,
         lock,
         native,
+    )
+
+
+def expand_project_sources(
+    root: str | Path,
+    *,
+    src_dir: str = "src",
+) -> tuple[tuple[ExpandedSource, ...], tuple[ModuleDiagnostic, ...]]:
+    """Load a Forge project and return sources after template expansion."""
+
+    root_path = Path(root)
+    if root_path.name == "forge.toml":
+        root_path = root_path.parent
+    root_path = root_path.resolve()
+
+    diagnostics: list[ModuleDiagnostic] = []
+    manifest = _load_project_manifest(root_path, diagnostics)
+
+    if manifest is None:
+        src_root = (root_path / src_dir).resolve()
+        source_inputs = _load_source_inputs(src_root, src_root)
+    else:
+        src_root = (root_path / src_dir).resolve()
+        packages = _load_dependency_packages(manifest, diagnostics)
+        _load_lock(root_path, manifest.dependencies, diagnostics)
+        dependency_inputs = tuple(
+            source_input
+            for package in packages
+            for source_input in _load_source_inputs(
+                package.src_root,
+                package.src_root,
+                namespace_prefix=(package.name,),
+                package=package.name,
+            )
+        )
+        source_inputs = (*_load_source_inputs(src_root, src_root), *dependency_inputs)
+
+    try:
+        expanded_sources = expand_template_sources(
+            tuple((source_input.source_name, source_input.source) for source_input in source_inputs)
+        )
+    except TemplateExpansionError as exc:
+        raise SyntaxError(str(exc)) from exc
+
+    return (
+        tuple(
+            ExpandedSource(
+                source_input.path,
+                source_input.relative_path,
+                source_input.source_name,
+                expanded_sources[source_input.source_name],
+                source_input.package,
+            )
+            for source_input in source_inputs
+        ),
+        tuple(diagnostics),
     )
 
 

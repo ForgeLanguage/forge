@@ -196,6 +196,7 @@ class _SafetyChecker:
                 for member in declaration.members
                 if isinstance(member, VariableDeclaration)
                 and "static" not in member.modifiers
+                and member.initializer is None
                 and self._is_non_nullable_resource_type(self.typecheck.types.type_of(member))
             }
             if not required_fields:
