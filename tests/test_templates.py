@@ -399,6 +399,27 @@ app.compile()
                 source_name="main.forge",
             )
 
+    def test_stateful_template_does_not_mask_undeclared_receiver(self) -> None:
+        expanded = expand_templates(
+            """
+class Builder {
+    #state compiled: Bool = false
+    public template func compile(): Void {
+        #{
+            state.compiled = true
+        #}
+    }
+}
+
+func main(): Void {
+    container.compile()
+}
+""",
+            source_name="main.forge",
+        )
+
+        self.assertIn("container.compile()", expanded)
+
     def test_stateful_template_rejects_runtime_control_flow(self) -> None:
         with self.assertRaisesRegex(
             TemplateExpansionError,

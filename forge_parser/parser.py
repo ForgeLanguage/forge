@@ -197,7 +197,7 @@ class Parser:
                 self._previous(),
                 ownership or "take",
             )
-        if self._match(TokenKind.CONST, TokenKind.LET):
+        if self._match(TokenKind.CONST, TokenKind.LET, TokenKind.LAZY):
             if ownership is not None:
                 raise ParserError(
                     "Local declaration cannot have ownership modifier",
@@ -594,6 +594,7 @@ class Parser:
 
         while True:
             modifiers = self._modifiers()
+            lazy = self._match(TokenKind.LAZY)
             ownership = "borrow"
             if self._match(TokenKind.TAKE, TokenKind.BORROW):
                 ownership = "take" if self._previous().kind is TokenKind.TAKE else "borrow"
@@ -606,6 +607,7 @@ class Parser:
                     self._type_reference(),
                     ownership,
                     modifiers,
+                    lazy,
                 )
             )
             if not self._match(TokenKind.COMMA):
@@ -635,6 +637,8 @@ class Parser:
             raise ParserError(
                 "Expected variable type or initializer", self._peek().location
             )
+        if keyword.kind is TokenKind.LAZY and initializer is None:
+            raise ParserError("Lazy declaration requires an initializer", keyword.location)
 
         self._match(TokenKind.SEMICOLON)
         return VariableDeclaration(
@@ -644,6 +648,8 @@ class Parser:
             keyword.kind is TokenKind.LET,
             declared_type,
             modifiers,
+            None,
+            keyword.kind is TokenKind.LAZY,
         )
 
     def _array_destructuring_declaration(
@@ -720,6 +726,7 @@ class Parser:
             declared_type,
             modifiers,
             ownership,
+            False,
         )
 
     def _type_reference(self) -> TypeReference:

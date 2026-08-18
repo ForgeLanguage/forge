@@ -863,9 +863,17 @@ class _SafetyChecker:
             self._validate_call_borrow_arguments(expression)
             return
         self._visit_expression(expression.callee)
-        for argument in expression.arguments:
-            self._visit_expression(argument)
+        lazy_parameters = self._call_lazy_parameters(expression)
+        for argument, lazy in zip(expression.arguments, lazy_parameters):
+            if not lazy:
+                self._visit_expression(argument)
         self._validate_call_borrow_arguments(expression)
+
+    def _call_lazy_parameters(self, expression: CallExpression) -> tuple[bool, ...]:
+        callee_type = self.typecheck.types.type_of(expression.callee)
+        if not isinstance(callee_type, FunctionType):
+            return (False,) * len(expression.arguments)
+        return callee_type.parameter_lazy or (False,) * len(expression.arguments)
 
     def _validate_call_borrow_arguments(self, expression: CallExpression) -> None:
         callee_type = self.typecheck.types.type_of(expression.callee)
@@ -892,8 +900,10 @@ class _SafetyChecker:
     def _visit_member_call(self, expression: CallExpression) -> None:
         callee = expression.callee
         self._visit_expression(callee.receiver)
-        for argument in expression.arguments:
-            self._visit_expression(argument)
+        lazy_parameters = self._call_lazy_parameters(expression)
+        for argument, lazy in zip(expression.arguments, lazy_parameters):
+            if not lazy:
+                self._visit_expression(argument)
 
         member = self._member_function(callee)
         if member is None:

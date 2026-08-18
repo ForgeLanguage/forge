@@ -118,17 +118,27 @@ class FunctionType(Type):
     parameter_types: tuple[Type, ...]
     return_type: Type
     parameter_ownership: tuple[str, ...] = ()
+    parameter_lazy: tuple[bool, ...] = ()
     outcomes: tuple[OutcomeType, ...] = ()
     return_ownership: str = "take"
     return_borrow_source: str | int | None = None
 
     @property
     def display_name(self) -> str:
+        lazy_flags = self.parameter_lazy or (False,) * len(self.parameter_types)
         parameters = ", ".join(
-            f"take {type_.display_name}" if ownership == "take" else type_.display_name
-            for type_, ownership in zip(
+            " ".join(
+                part
+                for part in (
+                    "lazy" if lazy else "",
+                    f"take {type_.display_name}" if ownership == "take" else type_.display_name,
+                )
+                if part
+            )
+            for type_, ownership, lazy in zip(
                 self.parameter_types,
                 self.parameter_ownership or ("borrow",) * len(self.parameter_types),
+                lazy_flags,
             )
         )
         success = self.return_type.display_name

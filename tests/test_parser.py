@@ -87,18 +87,32 @@ public static func main(args: String[]): Void
             """
 const name = "Forge"
 let counter: Int = 0
+lazy delayed: Int = 1
 """
         )
 
-        inferred, explicit = program.declarations
+        inferred, explicit, delayed = program.declarations
         self.assertIsInstance(inferred, VariableDeclaration)
         self.assertEqual(inferred.name, "name")
         self.assertFalse(inferred.mutable)
+        self.assertFalse(inferred.lazy)
         self.assertIsNone(inferred.type)
         self.assertIsInstance(explicit, VariableDeclaration)
         self.assertEqual(explicit.name, "counter")
         self.assertTrue(explicit.mutable)
         self.assertEqual(explicit.type.name, "Int")
+        self.assertIsInstance(delayed, VariableDeclaration)
+        self.assertEqual(delayed.name, "delayed")
+        self.assertFalse(delayed.mutable)
+        self.assertTrue(delayed.lazy)
+        self.assertEqual(delayed.type.name, "Int")
+
+    def test_parses_lazy_parameter(self) -> None:
+        function = parse("func consume(lazy value: Int): Int => value").declarations[0]
+
+        self.assertIsInstance(function, FunctionDeclaration)
+        self.assertTrue(function.parameters[0].lazy)
+        self.assertEqual(function.parameters[0].name, "value")
 
     def test_parses_template_function_type_parameter(self) -> None:
         function = parse("public template func parse<T:struct>(): T").declarations[0]

@@ -33,6 +33,7 @@ class TokenKind(str, Enum):
     GENERATOR = auto()
     NEW = auto()
     CONST = auto()
+    LAZY = auto()
     LET = auto()
     IF = auto()
     ELSE = auto()
@@ -150,6 +151,7 @@ KEYWORDS: dict[str, TokenKind] = {
     "interface": TokenKind.INTERFACE,
     "internal": TokenKind.INTERNAL,
     "let": TokenKind.LET,
+    "lazy": TokenKind.LAZY,
     "lock": TokenKind.LOCK,
     "new": TokenKind.NEW,
     "next": TokenKind.NEXT,

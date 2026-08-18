@@ -34,6 +34,7 @@ class Parameter(Node):
     type: TypeReference
     ownership: Literal["borrow", "take"] = "borrow"
     modifiers: tuple[str, ...] = ()
+    lazy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +131,7 @@ class VariableDeclaration(Declaration):
     type: TypeReference | None = None
     modifiers: tuple[str, ...] = ()
     field_ownership: Literal["borrow", "take"] | None = None
+    lazy: bool = False
 
 
 @dataclass(frozen=True, slots=True)

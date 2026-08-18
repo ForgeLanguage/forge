@@ -171,6 +171,8 @@ class _Emitter:
     _async_native_helpers: dict[str, str] = field(default_factory=dict)
     _async_native_task_contexts: dict[int, str] = field(default_factory=dict)
     _async_native_task_collections: dict[str, _AsyncNativeTaskCollectionContext] = field(default_factory=dict)
+    _lazy_variables: dict[int, IrVariable] = field(default_factory=dict)
+    _forcing_lazy_symbols: set[int] = field(default_factory=set)
 
     def emit_program(self, program: IrProgram, *, preamble: str = "") -> str:
         specialization_chunks = [] if self.declarations_in_header else [
@@ -312,6 +314,8 @@ class _Emitter:
         c_name: str | None = None,
         extra_parameters: tuple[str, ...] = (),
     ) -> str:
+        if any(parameter.lazy for parameter in function.parameters):
+            raise CEmissionError("Lazy parameters are not supported by the C backend yet")
         own_parameters = tuple(
             f"{self._c_type(parameter.type)} {parameter.name}"
             for parameter in function.parameters
@@ -1704,6 +1708,19 @@ typedef struct {{
         return self._emit_expression(expression.receiver)
 
     def _emit_variable(self, variable: IrVariable) -> str:
+        if variable.lazy:
+            if variable.initializer is None:
+                raise CEmissionError("Lazy variable requires an initializer")
+            if not self._statement_prelude_stack:
+                raise CEmissionError("Top-level lazy variables are not supported yet")
+            self.includes.add("stdbool.h")
+            self._lazy_variables[id(variable.symbol.node)] = variable
+            return "\n".join(
+                (
+                    f"bool {variable.name}__ready = false;",
+                    f"{self._c_type(variable.type)} {variable.name};",
+                )
+            )
         if isinstance(variable.type, TaskType) and self._is_async_runtime_call(variable.initializer):
             return self._emit_async_native_task_variable(variable)
         if (
@@ -2448,6 +2465,9 @@ typedef struct {{
                 return symbol_node.native_name
             if isinstance(symbol_node, FunctionDeclaration):
                 return self._function_symbol_c_name(expression.symbol)
+            lazy_variable = self._lazy_variables.get(id(symbol_node))
+            if lazy_variable is not None:
+                self._emit_lazy_force_prelude(lazy_variable)
             return expression.symbol.name
         if isinstance(expression, IrSpecialRef):
             return expression.kind
@@ -2591,6 +2611,26 @@ typedef struct {{
                 f"[{self._emit_expression(expression.index)}]"
             )
         raise CEmissionError(f"Cannot emit expression {type(expression).__name__}")
+
+    def _emit_lazy_force_prelude(self, variable: IrVariable) -> None:
+        if not self._statement_prelude_stack:
+            raise CEmissionError("Lazy variable read requires a statement prelude")
+        symbol_id = id(variable.symbol.node)
+        if symbol_id in self._forcing_lazy_symbols:
+            raise CEmissionError(f"Lazy variable '{variable.name}' cannot reference itself")
+        self._forcing_lazy_symbols.add(symbol_id)
+        try:
+            value = self._emit_expression(variable.initializer)
+        finally:
+            self._forcing_lazy_symbols.remove(symbol_id)
+        self._statement_prelude_stack[-1].extend(
+            (
+                f"if (!{variable.name}__ready) {{",
+                f"    {variable.name} = {value};",
+                f"    {variable.name}__ready = true;",
+                "}",
+            )
+        )
 
     def _emit_member_access(self, receiver: str, expression: IrMember) -> str:
         if (
@@ -3354,15 +3394,13 @@ typedef struct {{
             "taskItem",
             (),
             callee.receiver.type.result_type,
-            (),
-            outcomes,
+            outcomes=outcomes,
         )
         collection_function_type = FunctionType(
             "all",
             (),
             expression.type.result_type,
-            (),
-            outcomes,
+            outcomes=outcomes,
         )
         item_success_tag = self._result_tag_name(item_function_type, None)
         if outcome_result:
@@ -4046,8 +4084,7 @@ typedef struct {{
             "catch",
             (),
             expression.type,
-            (),
-            remaining,
+            outcomes=remaining,
         )
         partial_result_type = self._function_result_c_name(partial_function_type)
         full_temp = self._new_temp("outcome")
@@ -4198,8 +4235,7 @@ typedef struct {{
                 "array_pattern",
                 (),
                 expression.type,
-                (),
-                expression.outcomes,
+                outcomes=expression.outcomes,
             )
         if isinstance(expression, IrUnary) and expression.operator is TokenKind.AWAIT:
             return self._await_function_type(expression.operand, success_type=expression.type)
@@ -4216,13 +4252,12 @@ typedef struct {{
                 "bulk_map",
                 (),
                 expression.type,
-                (),
-                expression.outcomes,
+                outcomes=expression.outcomes,
             )
         if isinstance(expression, IrCatch):
             remaining = self._remaining_outcomes_for_catch(expression)
             if remaining:
-                return FunctionType("catch", (), expression.type, (), remaining)
+                return FunctionType("catch", (), expression.type, outcomes=remaining)
         return None
 
     def _await_function_type(
@@ -4233,15 +4268,14 @@ typedef struct {{
     ) -> FunctionType | None:
         if isinstance(expression, IrCall) and self._is_task_await_call(expression):
             outcomes = self._outcomes_for_task_await_call(expression)
-            return FunctionType("await", (), expression.type, (), outcomes)
+            return FunctionType("await", (), expression.type, outcomes=outcomes)
         if isinstance(expression.type, TaskType):
             outcomes = self._task_outcomes_for_ir(expression)
             return FunctionType(
                 "await",
                 (),
                 success_type or expression.type.result_type,
-                (),
-                outcomes,
+                outcomes=outcomes,
             )
         return None
 

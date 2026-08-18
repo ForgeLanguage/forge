@@ -60,6 +60,25 @@ bool enabled = true;
 """,
         )
 
+    def test_emits_lazy_local_force_on_first_read(self) -> None:
+        source = emit_c(
+            parse(
+                """
+func value(): Int {
+    lazy delayed = 1 + 2
+    print delayed
+    return delayed
+}
+"""
+            )
+        )
+
+        self.assertIn("bool delayed__ready = false;", source)
+        self.assertIn("int delayed;", source)
+        self.assertNotIn("int delayed = 1 + 2;", source)
+        self.assertLess(source.index("if (!delayed__ready)"), source.index('printf("%d\\n", delayed);'))
+        self.assertLess(source.index('printf("%d\\n", delayed);'), source.index("return delayed;"))
+
     def test_emits_if_else_and_assignment(self) -> None:
         source = emit_c(
             parse(

@@ -415,6 +415,7 @@ def _expand_stateful_template_calls(
         r"(?P<space>\s*)(?P<open>[\(\[])"
     )
     runtime_ranges = _runtime_control_ranges(source)
+    declared_names = _declared_value_names(source)
 
     def replacement(match: re.Match[str]) -> str:
         receiver = match.group("receiver")
@@ -426,6 +427,8 @@ def _expand_stateful_template_calls(
                 for key in templates_by_key
                 if "." in key
             ):
+                if receiver not in declared_names:
+                    return match.group(0)
                 raise TemplateExpansionError(_UNKNOWN_RECEIVER_CONFIG)
             return match.group(0)
         owner, config_id = config
@@ -468,6 +471,26 @@ def _expand_stateful_template_calls(
         return f"{generated_name}{match.group('space')}{match.group('open')}"
 
     return pattern.sub(replacement, source), generated
+
+
+def _declared_value_names(source: str) -> set[str]:
+    names = {
+        match.group("name")
+        for match in re.finditer(
+            r"(?m)^\s*(?:const|let)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
+            source,
+        )
+    }
+    for match in re.finditer(r"\bfunc\s+[A-Za-z_][A-Za-z0-9_]*\s*\((?P<parameters>[^)]*)\)", source):
+        for parameter in match.group("parameters").split(","):
+            parameter = parameter.strip()
+            if not parameter:
+                continue
+            parameter = re.sub(r"^(?:public|private|internal|take|borrow)\s+", "", parameter)
+            parameter_name = parameter.split(":", 1)[0].strip()
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", parameter_name):
+                names.add(parameter_name)
+    return names
 
 
 def _clone_state(state: dict[str, object]) -> dict[str, object]:

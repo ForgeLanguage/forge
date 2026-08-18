@@ -1157,6 +1157,51 @@ value = 2
 
         self.assertEqual(result.diagnostics[0].message, "Cannot assign to immutable 'value'")
 
+    def test_lazy_variable_is_immutable(self) -> None:
+        program = parse(
+            """
+lazy value = 1
+value = 2
+"""
+        )
+
+        result = check_types(program, raise_on_error=False)
+
+        self.assertEqual(result.diagnostics[0].message, "Cannot assign to immutable 'value'")
+
+    def test_lazy_parameter_requires_lazy_variable_argument(self) -> None:
+        program = parse(
+            """
+func consume(lazy value: Int): Int => value
+func main(): Int {
+    const eager = 1
+    return consume(eager)
+}
+"""
+        )
+
+        result = check_types(program, raise_on_error=False)
+
+        self.assertEqual(
+            result.diagnostics[0].message,
+            "Parameter 1 of consume is lazy; pass a lazy variable",
+        )
+
+    def test_lazy_parameter_accepts_lazy_variable_argument(self) -> None:
+        program = parse(
+            """
+func consume(lazy value: Int): Int => value
+func main(): Int {
+    lazy delayed = 1
+    return consume(delayed)
+}
+"""
+        )
+
+        result = check_types(program, raise_on_error=False)
+
+        self.assertEqual(result.diagnostics, ())
+
     def test_reports_invalid_binary_operator(self) -> None:
         program = parse('const value = "x" - "y"')
 

@@ -347,6 +347,7 @@ class _Lowerer:
             parameter.name,
             self._type_of(parameter),
             self.safety.safety.state_of_symbol(symbol),
+            parameter.lazy,
         )
 
     def _lower_variable(self, declaration: VariableDeclaration) -> IrVariable:
@@ -367,6 +368,7 @@ class _Lowerer:
             declaration.modifiers,
             self.safety.safety.state_of_symbol(symbol),
             self._effective_field_ownership(declaration, variable_type),
+            declaration.lazy,
         )
 
     def _effective_field_ownership(
@@ -1116,6 +1118,7 @@ class _Lowerer:
             parameter_types,
             return_type,
             tuple(parameter.ownership for parameter in declaration.parameters),
+            tuple(parameter.lazy for parameter in declaration.parameters),
             tuple(
                 OutcomeType(self._type_from_reference(outcome.type), outcome.required)
                 for outcome in declaration.outcomes

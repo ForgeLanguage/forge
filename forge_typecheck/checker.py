@@ -288,6 +288,7 @@ class _TypeChecker:
             parameter_types,
             return_type,
             tuple(parameter.ownership for parameter in declaration.parameters),
+            tuple(parameter.lazy for parameter in declaration.parameters),
             tuple(
                 OutcomeType(self._type_from_reference(outcome.type), outcome.required)
                 for outcome in declaration.outcomes
@@ -1375,11 +1376,19 @@ class _TypeChecker:
         parameter_ownership = callee_type.parameter_ownership or (
             "borrow",
         ) * len(callee_type.parameter_types)
+        parameter_lazy = callee_type.parameter_lazy or (
+            False,
+        ) * len(callee_type.parameter_types)
         target = self._call_target_name(expression.callee) or callee_type.name
-        for index, (argument, expected, ownership) in enumerate(
-            zip(expression.arguments, callee_type.parameter_types, parameter_ownership),
+        for index, (argument, expected, ownership, lazy) in enumerate(
+            zip(expression.arguments, callee_type.parameter_types, parameter_ownership, parameter_lazy),
             start=1,
         ):
+            if lazy and not self._is_lazy_argument(argument):
+                self._error(
+                    f"Parameter {index} of {target} is lazy; pass a lazy variable",
+                    argument,
+                )
             is_move = isinstance(argument, MoveExpression)
             if ownership == "take" and not is_move:
                 self._error(
@@ -1410,6 +1419,20 @@ class _TypeChecker:
         if isinstance(callee_type.return_type, (TaskType, TaskCollectionType)):
             self._set_task_outcomes(expression, callee_task_outcomes)
         return callee_type.return_type
+
+    def _is_lazy_argument(self, argument: Expression) -> bool:
+        if not isinstance(argument, IdentifierExpression):
+            return False
+        symbol = self.resolution.resolutions.symbol_for(argument)
+        if not isinstance(symbol, Symbol):
+            return False
+        node = symbol.node
+        return (
+            isinstance(node, VariableDeclaration)
+            and node.lazy
+            or isinstance(node, Parameter)
+            and node.lazy
+        )
 
     def _call_child_outcomes(self, expression: CallExpression) -> tuple[OutcomeType, ...]:
         return (

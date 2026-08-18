@@ -58,6 +58,7 @@ class IrParameter(IrNode):
     name: str
     type: Type
     safety: BindingState | None = None
+    lazy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +84,7 @@ class IrVariable(IrDeclaration):
     modifiers: tuple[str, ...] = ()
     safety: BindingState | None = None
     field_ownership: str | None = None
+    lazy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
