@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields as dataclass_fields, is_dataclass
+from dataclasses import dataclass, field, fields as dataclass_fields, is_dataclass, replace
 from pathlib import PurePath
 import re
 from typing import TypeAlias
@@ -10,6 +10,7 @@ from typing import TypeAlias
 from forge_intrinsics import string_intrinsic
 from forge_ir import (
     IrAssignment,
+    IrArrayAllocation,
     IrArrayDestructuring,
     IrArrayBulkCall,
     IrArrayLiteral,
@@ -176,8 +177,8 @@ class _Emitter:
 
     def emit_program(self, program: IrProgram, *, preamble: str = "") -> str:
         specialization_chunks = [] if self.declarations_in_header else [
-            self._emit_generic_struct_specialization(type_)
-            for type_ in self._generic_struct_specializations(program)
+            self._emit_generic_type_specialization(type_)
+            for type_ in self._generic_type_specializations(program)
         ]
         body_chunks = [
             self._emit_top_level(item)
@@ -194,8 +195,8 @@ class _Emitter:
         type_declarations: list[str] = []
         declarations: list[str] = []
         type_declarations.extend(
-            self._emit_generic_struct_specialization(type_)
-            for type_ in self._generic_struct_specializations(program)
+            self._emit_generic_type_specialization(type_)
+            for type_ in self._generic_type_specializations(program)
         )
         for item in program.declarations:
             if isinstance(item, IrClass):
@@ -391,7 +392,14 @@ static void* _forge_realloc(void* pointer, size_t size) {
             self.includes.add("stdlib.h")
             chunks.append(
                 """static void* _forge_array_new(size_t capacity, size_t element_size) {
-    return capacity == 0 ? NULL : _forge_alloc(element_size * capacity);
+    if (capacity == 0) {
+        return NULL;
+    }
+    void* result = calloc(capacity, element_size);
+    if (result == NULL) {
+        abort();
+    }
+    return result;
 }
 
 static void _forge_array_grow(void** data, size_t* cap, size_t element_size) {
@@ -586,15 +594,8 @@ typedef struct {{
         node = class_.symbol.node if class_.symbol is not None else None
         return isinstance(node, ClassDeclaration) and bool(node.type_parameters)
 
-    def _generic_struct_specializations(self, program: IrProgram) -> tuple[StructType, ...]:
-        found: dict[str, StructType] = {}
-        generic_classes = {
-            id(declaration.symbol): declaration
-            for declaration in program.declarations
-            if isinstance(declaration, IrClass)
-            and declaration.symbol is not None
-            and self._is_generic_class_declaration(declaration)
-        }
+    def _generic_type_specializations(self, program: IrProgram) -> tuple[ClassType | StructType, ...]:
+        found: dict[str, ClassType | StructType] = {}
 
         def visit_type(type_: Type) -> None:
             if isinstance(type_, NullableType):
@@ -612,9 +613,14 @@ typedef struct {{
             elif isinstance(type_, StructType):
                 for argument in type_.type_arguments:
                     visit_type(argument)
-                if self._is_generic_struct_type(type_):
+                if self._is_generic_type(type_):
                     found[self._class_type_c_name(type_)] = type_
-            elif isinstance(type_, (ClassType, InterfaceType)):
+            elif isinstance(type_, ClassType):
+                for argument in type_.type_arguments:
+                    visit_type(argument)
+                if self._is_generic_type(type_):
+                    found[self._class_type_c_name(type_)] = type_
+            elif isinstance(type_, InterfaceType):
                 for argument in type_.type_arguments:
                     visit_type(argument)
 
@@ -664,16 +670,39 @@ typedef struct {{
             visit_node(declaration)
         return tuple(found.values())
 
-    def _is_generic_struct_type(self, type_: StructType) -> bool:
+    def _is_generic_type(self, type_: ClassType | StructType) -> bool:
         node = type_.symbol.node if type_.symbol is not None else None
         return (
             isinstance(node, ClassDeclaration)
-            and node.kind == "struct"
             and bool(node.type_parameters)
             and bool(type_.type_arguments)
+            and not any(self._contains_type_parameter(argument) for argument in type_.type_arguments)
+            and (
+                (isinstance(type_, StructType) and node.kind == "struct")
+                or (isinstance(type_, ClassType) and node.kind == "class")
+            )
         )
 
-    def _emit_generic_struct_specialization(self, type_: StructType) -> str:
+    def _contains_type_parameter(self, type_: Type) -> bool:
+        if isinstance(type_, TypeParameterType):
+            return True
+        if isinstance(type_, NullableType):
+            return self._contains_type_parameter(type_.inner_type)
+        if isinstance(type_, ArrayType):
+            return self._contains_type_parameter(type_.element_type)
+        if isinstance(type_, (TaskType, TaskCollectionType)):
+            return self._contains_type_parameter(type_.result_type)
+        if isinstance(type_, FunctionType):
+            return (
+                any(self._contains_type_parameter(parameter) for parameter in type_.parameter_types)
+                or self._contains_type_parameter(type_.return_type)
+                or any(self._contains_type_parameter(outcome.type) for outcome in type_.outcomes)
+            )
+        if isinstance(type_, (ClassType, StructType, InterfaceType)):
+            return any(self._contains_type_parameter(argument) for argument in type_.type_arguments)
+        return False
+
+    def _emit_generic_type_specialization(self, type_: ClassType | StructType) -> str:
         node = type_.symbol.node if type_.symbol is not None else None
         if not isinstance(node, ClassDeclaration):
             return ""
@@ -681,43 +710,54 @@ typedef struct {{
             parameter.name: argument
             for parameter, argument in zip(node.type_parameters, type_.type_arguments)
         }
-        fields = []
         class_ = self._generic_ir_class(type_)
         if class_ is not None:
-            for member in class_.members:
-                if not isinstance(member, IrVariable) or "static" in member.modifiers:
-                    continue
-                field_type = self._specialize_type_by_name(member.type, substitutions)
-                fields.append(
-                    IrVariable(
-                        member.location,
-                        member.symbol,
-                        member.name,
-                        field_type,
-                        member.mutable,
-                        None,
-                        member.modifiers,
-                        member.safety,
-                        member.field_ownership,
-                    )
+            specialized = self._specialize_ir_node_by_name(class_, substitutions)
+            if isinstance(specialized, IrClass):
+                specialized = self._specialized_generic_class(type_, specialized)
+                return self._emit_class(specialized)
+        fields = []
+        for member in node.members:
+            if not isinstance(member, VariableDeclaration) or member.type is None or "static" in member.modifiers:
+                continue
+            field_type = self._type_from_generic_ast_reference(member.type, substitutions)
+            fields.append(
+                IrVariable(
+                    member.location,
+                    type_.symbol,
+                    member.name,
+                    field_type,
+                    member.mutable,
+                    None,
+                    member.modifiers,
                 )
-        else:
-            for member in node.members:
-                if not isinstance(member, VariableDeclaration) or member.type is None or "static" in member.modifiers:
-                    continue
-                field_type = self._type_from_generic_ast_reference(member.type, substitutions)
-                fields.append(
-                    IrVariable(
-                        member.location,
-                        type_.symbol,
-                        member.name,
-                        field_type,
-                        member.mutable,
-                        None,
-                        member.modifiers,
-                    )
-                )
+            )
         return self._struct_definition(self._class_type_c_name(type_), fields)
+
+    def _specialized_generic_class(
+        self,
+        type_: ClassType | StructType,
+        class_: IrClass,
+    ) -> IrClass:
+        members = []
+        for member in class_.members:
+            if (
+                isinstance(member, IrFunction)
+                and member.kind == "new"
+                and isinstance(member.function_type, FunctionType)
+            ):
+                member = replace(
+                    member,
+                    return_type=type_,
+                    function_type=replace(member.function_type, return_type=type_),
+                )
+            members.append(member)
+        return replace(
+            class_,
+            symbol=None,
+            name=self._class_type_c_name(type_),
+            members=tuple(members),
+        )
 
     def _type_from_generic_ast_reference(self, reference, substitutions: dict[str, Type]) -> Type:
         if reference.name in substitutions:
@@ -760,7 +800,7 @@ typedef struct {{
             result = NullableType(f"{result.name}?", result)
         return result
 
-    def _generic_ir_class(self, type_: StructType) -> IrClass | None:
+    def _generic_ir_class(self, type_: ClassType | StructType) -> IrClass | None:
         target_symbol = type_.symbol
         if target_symbol is None:
             return None
@@ -768,6 +808,25 @@ typedef struct {{
             if isinstance(declaration, IrClass) and declaration.symbol == target_symbol:
                 return declaration
         return None
+
+    def _specialize_ir_node_by_name(self, value, substitutions: dict[str, Type]):
+        if isinstance(value, Type):
+            return self._specialize_type_by_name(value, substitutions)
+        if isinstance(value, tuple):
+            return tuple(
+                self._specialize_ir_node_by_name(item, substitutions)
+                for item in value
+            )
+        if is_dataclass(value):
+            changes = {}
+            for field_info in dataclass_fields(value):
+                field_value = getattr(value, field_info.name)
+                specialized = self._specialize_ir_node_by_name(field_value, substitutions)
+                if specialized != field_value:
+                    changes[field_info.name] = specialized
+            if changes:
+                return replace(value, **changes)
+        return value
 
     def _specialize_type_by_name(self, type_: Type, substitutions: dict[str, Type]) -> Type:
         if isinstance(type_, TypeParameterType) and type_.name in substitutions:
@@ -2518,9 +2577,15 @@ typedef struct {{
             string_field_assignment = self._emit_owned_string_struct_field_assignment(expression)
             if string_field_assignment is not None:
                 return string_field_assignment
+            string_array_assignment = self._emit_owned_string_array_index_assignment(expression)
+            if string_array_assignment is not None:
+                return string_array_assignment
             local_assignment = self._emit_owned_local_assignment(expression)
             if local_assignment is not None:
                 return local_assignment
+            array_member_assignment = self._emit_owned_array_member_assignment(expression)
+            if array_member_assignment is not None:
+                return array_member_assignment
             array_assignment = self._emit_owned_array_local_assignment(expression)
             if array_assignment is not None:
                 return array_assignment
@@ -2561,6 +2626,8 @@ typedef struct {{
             if self.ownership.owned_array_expression(expression):
                 return self._emit_owned_array_value(expression, cleanup_result=True)
             return self._emit_call_expression(expression)
+        if isinstance(expression, IrArrayAllocation):
+            return self._emit_array_allocation(expression)
         if isinstance(expression, IrArrayLiteral):
             return self._emit_array_literal(expression)
         if isinstance(expression, IrStructLiteral):
@@ -2867,7 +2934,7 @@ typedef struct {{
         is_static = (
             isinstance(member_node, FunctionDeclaration)
             and (member_node.kind == "new" or "static" in member_node.modifiers)
-        )
+        ) or (member_node is None and callee.member == "new")
         function = (
             member_node.native_name
             if isinstance(member_node, FunctionDeclaration)
@@ -2967,6 +3034,59 @@ typedef struct {{
             self._array_cleanup_lines_for(array_type, target)
         )
         return f"{target} = {replacement}"
+
+    def _emit_owned_array_member_assignment(self, expression: IrAssignment) -> str | None:
+        if not isinstance(expression.target, IrMember):
+            return None
+        array_type = expression.target.type
+        if not isinstance(array_type, ArrayType) or array_type.size is not None:
+            return None
+        if not (
+            self.ownership.owned_array_expression(expression.value)
+            or (
+                isinstance(expression.value, IrLocalRef)
+                and isinstance(expression.value.type, ArrayType)
+                and expression.value.type.size is None
+            )
+        ):
+            return None
+        target = self._emit_expression(expression.target)
+        value = self._emit_owned_array_value(expression.value, cleanup_result=False)
+        self._statement_prelude_stack[-1].extend(
+            self._array_cleanup_lines_for(array_type, target)
+        )
+        if isinstance(expression.value, IrLocalRef):
+            self._disable_array_cleanup(expression.value.symbol)
+        return f"{target} = {value}"
+
+    def _disable_array_cleanup(self, symbol: Symbol) -> None:
+        for cleanup_scope in self._array_cleanup_stack:
+            cleanup_scope[:] = [
+                binding
+                for binding in cleanup_scope
+                if self._array_cleanup_symbol(binding) != symbol
+            ]
+
+    def _emit_owned_string_array_index_assignment(self, expression: IrAssignment) -> str | None:
+        if not isinstance(expression.target, IrIndex):
+            return None
+        if expression.target.type != STRING or expression.value.type != STRING:
+            return None
+        if not isinstance(expression.target.receiver.type, ArrayType):
+            return None
+        if expression.target.receiver.type.element_type != STRING:
+            return None
+        if not self.ownership.owned_string_assignment_value(expression.value):
+            return None
+        target = self._emit_expression(expression.target)
+        value = (
+            self._emit_expression(expression.value)
+            if isinstance(expression.value, (IrForward, IrCatch))
+            else self._emit_owned_string_value(expression.value, cleanup_result=False)
+        )
+        self.includes.add("stdlib.h")
+        self._statement_prelude_stack[-1].append(f"free((void*){target});")
+        return f"{target} = {value}"
 
     def _emit_owned_string_struct_field_assignment(self, expression: IrAssignment) -> str | None:
         if not isinstance(expression.target, IrMember):
@@ -3089,6 +3209,18 @@ typedef struct {{
                 cleanup_result=cleanup_result,
             )
         if isinstance(expression, IrArrayLiteral):
+            value = self._emit_expression(expression)
+            if cleanup_result and isinstance(expression.type, ArrayType):
+                cleanup_lines = self._array_cleanup_lines_for(
+                    expression.type,
+                    value,
+                )
+                if cleanup_lines:
+                    self._statement_cleanup_stack[-1].append(
+                        "\n".join(cleanup_lines)
+                    )
+            return value
+        if isinstance(expression, IrArrayAllocation):
             value = self._emit_expression(expression)
             if cleanup_result and isinstance(expression.type, ArrayType):
                 cleanup_lines = self._array_cleanup_lines_for(
@@ -3272,6 +3404,30 @@ typedef struct {{
             self._statement_prelude_stack[-1].append(
                 f"{array_name}_push(&{temp}, {value});"
             )
+        return temp
+
+    def _emit_array_allocation(self, expression: IrArrayAllocation) -> str:
+        if not isinstance(expression.type, ArrayType) or expression.type.size is not None:
+            raise CEmissionError("Only dynamic array allocation is supported")
+        if not self._statement_prelude_stack:
+            raise CEmissionError("Top-level array allocation is not supported yet")
+        array_name = self._array_c_name(expression.type)
+        self._array_runtime_helper(expression.type)
+        temp = self._new_temp("array")
+        capacity = self._emit_expression(expression.capacity)
+        element_type = self._c_type(expression.type.element_type)
+        self._statement_prelude_stack[-1].append(
+            f"{array_name} {temp};"
+        )
+        self._statement_prelude_stack[-1].append(
+            f"{temp}.len = (size_t){capacity};"
+        )
+        self._statement_prelude_stack[-1].append(
+            f"{temp}.cap = (size_t){capacity};"
+        )
+        self._statement_prelude_stack[-1].append(
+            f"{temp}.data = _forge_array_new((size_t){capacity}, sizeof({element_type}));"
+        )
         return temp
 
     def _new_temp(self, prefix: str) -> str:
@@ -4468,7 +4624,14 @@ typedef struct {{
             )
             if intrinsic is not None:
                 return True
-        return expression.symbol is not None and expression.symbol.kind == "function"
+        return (
+            expression.symbol is not None
+            and expression.symbol.kind == "function"
+        ) or (
+            expression.symbol is None
+            and expression.member == "new"
+            and isinstance(expression.receiver.type, ClassType)
+        )
 
     def _is_static_variable_member(self, expression: IrMember) -> bool:
         member_node = expression.symbol.node if expression.symbol is not None else None

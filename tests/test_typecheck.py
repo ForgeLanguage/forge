@@ -707,6 +707,29 @@ get(): DriverFetchResult {
         count = program.declarations[1]
         self.assertEqual(result.types.type_of(count.initializer), INT)
 
+    def test_array_new_allocates_dynamic_array_of_type_argument(self) -> None:
+        program = parse("const values: Int[] = Array.new<Int>(3)")
+
+        result = check_types(program)
+
+        values = program.declarations[0]
+        self.assertEqual(result.types.type_of(values.initializer).display_name, "Int[]")
+
+    def test_array_index_assignment_checks_element_type(self) -> None:
+        result = check_types(
+            parse(
+                """
+main(): Void {
+    var values: Int[] = Array.new<Int>(1)
+    values[0] = "bad"
+}
+"""
+            ),
+            raise_on_error=False,
+        )
+
+        self.assertEqual(result.diagnostics[0].message, "Cannot assign String to Int")
+
     def test_rejects_unknown_dynamic_array_member(self) -> None:
         result = check_types(
             parse("const values: Int[] = [1, 2]\nconst count: Int = values.length"),
@@ -967,6 +990,35 @@ class Logger {
 
 struct Defs {
     public logger: Definition<Logger>
+}
+"""
+        )
+
+        result = check_types(program)
+
+        self.assertTrue(result.ok)
+
+    def test_specializes_generic_class_constructor_and_method(self) -> None:
+        program = parse(
+            """
+@multidef
+class Box<T> {
+    public value: T
+
+    public new(value: T) {
+        this.value = value
+    }
+
+    public get(): T {
+        return this.value
+    }
+}
+
+class App {
+    public static main(): Void {
+        const box: Box<Int> = Box.new<Int>(1)
+        const value: Int = box.get()
+    }
 }
 """
         )

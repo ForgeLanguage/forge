@@ -273,9 +273,10 @@ app.compile()
             source_name="main.forge",
         )
 
-        self.assertIn("Builder_apply__Core__Config_1()", expanded)
-        self.assertIn("Builder_compile__nongeneric__Config_1()", expanded)
-        self.assertIn("Builder_apply__Core__Config_1()", expanded)
+        self.assertIn("class Builder__Config_1", expanded)
+        self.assertIn("const app = Builder__Config_1.new()", expanded)
+        self.assertIn("app.apply__Core()", expanded)
+        self.assertIn("app.compile()", expanded)
 
     def test_stateful_template_rejects_apply_after_compile_same_receiver(self) -> None:
         with self.assertRaisesRegex(TemplateExpansionError, "already compiled"):
@@ -343,8 +344,10 @@ worker.apply<Core>()
             source_name="main.forge",
         )
 
-        self.assertIn("Builder_compile__nongeneric__Config_1", expanded)
-        self.assertIn("Builder_apply__Core__Config_2", expanded)
+        self.assertIn("class Builder__Config_1", expanded)
+        self.assertIn("class Builder__Config_2", expanded)
+        self.assertIn("app.compile()", expanded)
+        self.assertIn("worker.apply__Core()", expanded)
 
     def test_stateful_template_alias_shares_receiver_state(self) -> None:
         with self.assertRaisesRegex(TemplateExpansionError, "already compiled"):
@@ -537,6 +540,92 @@ const workerLogger = worker.resolve<WorkerLogger>()
         self.assertIn("public resolve__Logger(): Logger", main)
         self.assertIn("return Logger.new(", main)
         self.assertIn("return Service.new(move Logger.new())", main)
+
+    def test_stateful_owner_specialization_is_domain_neutral(self) -> None:
+        expanded = expand_template_sources(
+            (
+                (
+                    "Registry.forge",
+                    """
+class
+
+#state entries: Dict<String, Bool> = {}
+#state sealed: Bool = false
+
+public new() {}
+
+public template apply<T:struct>(defs: T): Void {
+    #for Reflection.type<T>().fields as field {
+        #{
+            state.entries[field.type.firstArgumentOrSelf.name] = true
+        #}
+    #}
+}
+
+public template build(): Void {
+    #{
+        state.sealed = true
+    #}
+}
+
+public template resolve<T:class>(): T {
+    #{
+        if state.sealed == false {
+            Compiler.error("Registry is not sealed")
+        }
+        if state.entries.contains(Reflection.type<T>().name) == false {
+            Compiler.error("Registry entry is missing: #{Reflection.type<T>().name}")
+        }
+    #}
+
+    return #{Reflection.construct<T>()}
+}
+""",
+                ),
+                (
+                    "Package.forge",
+                    """
+class
+
+public new() {}
+
+public defs(): FooDefs => {}
+
+public bind(target: Target): Void {
+    target.apply<FooDefs>(this.defs())
+}
+""",
+                ),
+                (
+                    "main.forge",
+                    """
+@multidef
+struct Token<T> {}
+
+struct FooDefs {
+    public foo: Token<Foo>
+}
+
+class Foo {}
+
+const registry = Registry.new()
+const package = Package.new()
+package.bind(registry)
+registry.build()
+const foo = registry.resolve<Foo>()
+""",
+                ),
+            )
+        )
+
+        main = expanded["main.forge"]
+        self.assertIn("const registry = Registry__Config_1.new()", main)
+        self.assertIn("registry.apply__FooDefs(Package.defs())", main)
+        self.assertIn("registry.build()", main)
+        self.assertIn("registry.resolve__Foo()", main)
+        self.assertIn("class Registry__Config_1", main)
+        self.assertIn("public resolve__Foo(): Foo", main)
+        self.assertIn("return Foo.new()", main)
 
     def test_di_container_field_receiver_generates_specialized_container_type(self) -> None:
         expanded = expand_template_sources(
@@ -770,7 +859,8 @@ container.apply<Defs>(defs)
         )
 
         self.assertNotIn("implements ContainerInterface", expanded["Container.forge"])
-        self.assertIn("Container_apply__Defs__Config_1(defs)", expanded["main.forge"])
+        self.assertIn("const container = Container__Config_1.new()", expanded["main.forge"])
+        self.assertIn("container.apply__Defs(defs)", expanded["main.forge"])
 
     def test_project_compiles_template_expansion(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

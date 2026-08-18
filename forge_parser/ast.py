@@ -267,6 +267,12 @@ class GroupingExpression(Expression):
 
 
 @dataclass(frozen=True, slots=True)
+class GenericTypeExpression(Expression):
+    receiver: Expression
+    arguments: tuple[TypeReference, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class UnaryExpression(Expression):
     operator: TokenKind
     operand: Expression

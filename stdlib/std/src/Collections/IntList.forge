@@ -1,0 +1,52 @@
+class
+
+private var items: Int[]
+private var count: Int
+
+public static create(capacity: Int): IntList {
+    const list = IntList.new()
+    list.items = Array.new<Int>(capacity)
+    list.count = 0
+    return move list
+}
+
+public push(value: Int): Void {
+    if this.count == this.items.len {
+        this.grow()
+    }
+    this.items[this.count] = value
+    this.count = this.count + 1
+}
+
+public set(index: Int, value: Int): Void {
+    this.items[index] = value
+}
+
+public at(index: Int): Int {
+    return this.items[index]
+}
+
+public length(): Int {
+    return this.count
+}
+
+public toArray(): Int[] {
+    var result: Int[] = Array.new<Int>(this.count)
+    var index: Int = 0
+    while index < this.count {
+        result[index] = this.items[index]
+        index += 1
+    }
+    return result
+}
+
+private grow(): Void {
+    const nextCapacity = this.items.len == 0 ? 1 : this.items.len * 2
+    var resized: Int[] = Array.new<Int>(nextCapacity)
+    var index: Int = 0
+    while index < this.count {
+        resized[index] = this.items[index]
+        index += 1
+    }
+    this.items = resized
+}

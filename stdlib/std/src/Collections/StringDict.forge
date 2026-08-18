@@ -1,0 +1,98 @@
+@multidef
+
+struct StringDictEntry {
+    public key: String
+    public value: String
+}
+
+class StringDict {
+
+private var entries: StringDictEntry[]
+private var count: Int
+
+public static create(capacity: Int): StringDict {
+    const dict = StringDict.new()
+    dict.entries = Array.new<StringDictEntry>(capacity)
+    dict.count = 0
+    return move dict
+}
+
+public set(key: String, value: String): Void {
+    const index = this.indexOf(key)
+    if index >= 0 {
+        this.entries[index] = { key: key, value: value }
+        return
+    }
+    if this.count == this.entries.len {
+        this.grow()
+    }
+    this.entries[this.count] = { key: key, value: value }
+    this.count = this.count + 1
+}
+
+public contains(key: String): Bool {
+    return this.indexOf(key) >= 0
+}
+
+public get(key: String): String? {
+    const index = this.indexOf(key)
+    if index < 0 {
+        return null
+    }
+    return this.entries[index].value
+}
+
+public getOrDefault(key: String, fallback: String): String {
+    const index = this.indexOf(key)
+    if index < 0 {
+        return fallback
+    }
+    return this.entries[index].value
+}
+
+public length(): Int {
+    return this.count
+}
+
+public keys(): String[] {
+    var result: String[] = Array.new<String>(this.count)
+    var index: Int = 0
+    while index < this.count {
+        result[index] = this.entries[index].key
+        index += 1
+    }
+    return result
+}
+
+public values(): String[] {
+    var result: String[] = Array.new<String>(this.count)
+    var index: Int = 0
+    while index < this.count {
+        result[index] = this.entries[index].value
+        index += 1
+    }
+    return result
+}
+
+private indexOf(key: String): Int {
+    var index: Int = 0
+    while index < this.count {
+        if this.entries[index].key.equals(key) {
+            return index
+        }
+        index += 1
+    }
+    return -1
+}
+
+private grow(): Void {
+    const nextCapacity = this.entries.len == 0 ? 1 : this.entries.len * 2
+    var resized: StringDictEntry[] = Array.new<StringDictEntry>(nextCapacity)
+    var index: Int = 0
+    while index < this.count {
+        resized[index] = this.entries[index]
+        index += 1
+    }
+    this.entries = resized
+}
+}

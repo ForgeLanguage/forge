@@ -246,6 +246,91 @@ const value = answer()
         self.assertEqual(result.stdout, "Hello from Forge\n")
 
     @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
+    def test_run_array_new_and_index_assignment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "app.forge"
+            source.write_text(
+                """
+main(): Void {
+    var values: Int[] = Array.new<Int>(2)
+    values[0] = 20
+    values[1] = 22
+    print values.len
+    print values[0] + values[1]
+}
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "run", str(source)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+        self.assertEqual(result.stdout, "2\n42\n")
+
+    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
+    def test_run_bundled_std_collections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "forge.toml").write_text(
+                """
+entry_point = "./src/main.forge"
+
+[dependencies]
+std = "0.1.0"
+"""
+            )
+            (root / "forge.lock").write_text('std = "0.1.0"\n')
+            (root / "src" / "main.forge").write_text(
+                """
+use std.Collections.IntList
+use std.Collections.StringList
+use std.Collections.StringDict
+use std.Collections.StringMap
+
+main(): Void {
+    const ints = IntList.create(1)
+    ints.push(20)
+    ints.push(22)
+    print ints.length()
+    print ints.at(0) + ints.at(1)
+
+    const strings = StringList.create(1)
+    strings.push("a")
+    strings.push("b")
+    print strings.length()
+    print strings.contains("b")
+
+    const dict = StringDict.create(1)
+    dict.set("name", "forge")
+    dict.set("name", "fl2")
+    print dict.length()
+    print dict.getOrDefault("name", "missing")
+    print dict.getOrDefault("none", "missing")
+
+    const map = StringMap.create(1)
+    map.set("answer", "42")
+    print map.length()
+    print map.getOrDefault("answer", "missing")
+}
+"""
+            )
+
+            result = subprocess.run(
+                [str(FORGE), "run", str(root)],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+        self.assertEqual(result.stdout, "2\n42\n2\n1\n1\nfl2\nmissing\n1\n42\n")
+
+    @unittest.skipIf(shutil.which("cc") is None, "C compiler is not available")
     def test_run_async_function_with_sync_await_bridge(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "app.forge"

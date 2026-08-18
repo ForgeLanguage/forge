@@ -30,6 +30,7 @@ from forge_parser import (
     ForExpression,
     ForwardExpression,
     FunctionDeclaration,
+    GenericTypeExpression,
     GroupingExpression,
     IdentifierExpression,
     IfStatement,
@@ -97,6 +98,7 @@ _BUILTIN_TYPES = frozenset(
         "null",
     }
 )
+_BUILTIN_RECEIVERS = frozenset({"Array"})
 _BUILTIN_INTERFACES = frozenset({"Stringable"})
 
 
@@ -367,6 +369,10 @@ class _Resolver:
             self._resolve_special(expression, "self")
         elif isinstance(expression, GroupingExpression):
             self._visit_expression(expression.expression)
+        elif isinstance(expression, GenericTypeExpression):
+            self._visit_expression(expression.receiver)
+            for argument in expression.arguments:
+                self._visit_type_reference(argument)
         elif isinstance(expression, ForwardExpression):
             self._visit_expression(expression.expression)
         elif isinstance(expression, CatchExpression):
@@ -441,7 +447,10 @@ class _Resolver:
         symbol = self._lookup(expression.name, self._scope_for(expression))
         if (
             symbol is None
-            and expression.name in _BUILTIN_TYPES
+            and (
+                expression.name in _BUILTIN_TYPES
+                or expression.name in _BUILTIN_RECEIVERS
+            )
             and self._member_receiver_stack
             and self._member_receiver_stack[-1] == id(expression)
         ):

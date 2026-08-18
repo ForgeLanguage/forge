@@ -1,0 +1,41 @@
+use std.Collections.StringDict
+
+class
+
+private take var dict: StringDict
+
+public new(capacity: Int) {
+    this.dict = StringDict.create(capacity)
+}
+
+public static create(capacity: Int): StringMap {
+    return StringMap.new(capacity)
+}
+
+public set(key: String, value: String): Void {
+    this.dict.set(key, value)
+}
+
+public contains(key: String): Bool {
+    return this.dict.contains(key)
+}
+
+public get(key: String): String? {
+    return this.dict.get(key)
+}
+
+public getOrDefault(key: String, fallback: String): String {
+    return this.dict.getOrDefault(key, fallback)
+}
+
+public length(): Int {
+    return this.dict.length()
+}
+
+public keys(): String[] {
+    return this.dict.keys()
+}
+
+public values(): String[] {
+    return this.dict.values()
+}

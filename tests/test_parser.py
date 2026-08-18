@@ -18,6 +18,7 @@ from forge_parser import (
     ForExpression,
     ForwardExpression,
     FunctionDeclaration,
+    GenericTypeExpression,
     IdentifierExpression,
     IfStatement,
     IndexExpression,
@@ -151,6 +152,12 @@ lazy delayed: Int = 1
         self.assertIsInstance(target.receiver, MemberExpression)
         self.assertEqual(target.receiver.member, "items")
         self.assertIsInstance(statement.expression.value, CallExpression)
+
+    def test_parses_variable_index_assignment_target(self) -> None:
+        statement = parse("items[index] = value").declarations[0]
+
+        self.assertIsInstance(statement.expression, AssignmentExpression)
+        self.assertIsInstance(statement.expression.target, BulkCallExpression)
 
     def test_parses_compound_and_increment_assignments(self) -> None:
         plus_equal = parse("counter += 2").declarations[0].expression
@@ -512,6 +519,25 @@ load(): Void, !AccessDenied, ?AllocFailed {
 
         self.assertIsInstance(declaration, ClassDeclaration)
         self.assertEqual(declaration.type_parameters[0].name, "T")
+
+    def test_preserves_folded_generic_class_type_parameters(self) -> None:
+        declaration = parse(
+            "class <T>\nprivate var items: T[]\n",
+            source_name="List.forge",
+        ).declarations[0]
+
+        self.assertIsInstance(declaration, ClassDeclaration)
+        self.assertEqual(declaration.name, "List")
+        self.assertEqual(declaration.type_parameters[0].name, "T")
+
+    def test_parses_generic_type_receiver(self) -> None:
+        expression = parse_expression("List<T>.new()")
+
+        self.assertIsInstance(expression, CallExpression)
+        self.assertIsInstance(expression.callee, MemberExpression)
+        receiver = expression.callee.receiver
+        self.assertIsInstance(receiver, GenericTypeExpression)
+        self.assertEqual(receiver.arguments[0].name, "T")
 
     def test_parses_catch_expression_handlers(self) -> None:
         declaration = parse(

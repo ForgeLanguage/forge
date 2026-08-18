@@ -219,6 +219,27 @@ first(): Int {
         self.assertIn("forge_tmp_return1 = values.data[index];", source)
         self.assertIn("return forge_tmp_return1;", source)
 
+    def test_emits_array_new_and_index_assignment(self) -> None:
+        source = emit_c(
+            parse(
+                """
+first(): Int {
+    var values: Int[] = Array.new<Int>(2)
+    values[0] = 42
+    return values[0]
+}
+"""
+            )
+        )
+
+        self.assertIn("ForgeArray_Int forge_tmp_array", source)
+        self.assertIn(".len = (size_t)2;", source)
+        self.assertIn(".cap = (size_t)2;", source)
+        self.assertIn(".data = _forge_array_new((size_t)2, sizeof(int));", source)
+        self.assertIn("ForgeArray_Int values = forge_tmp_array", source)
+        self.assertIn("values.data[0] = 42;", source)
+        self.assertIn("forge_tmp_return1 = values.data[0];", source)
+
     def test_emits_dynamic_array_len_as_int_cast(self) -> None:
         source = emit_c(
             parse(
@@ -1206,6 +1227,41 @@ const defs: Defs = {
 
         self.assertIn("struct Definition_Logger {", source)
         self.assertIn("struct Logger* instance;", source)
+
+    def test_emits_generic_class_specialization(self) -> None:
+        source = emit_c(
+            parse(
+                """
+@multidef
+class Box<T> {
+    public value: T
+
+    public new(value: T) {
+        this.value = value
+    }
+
+    public get(): T {
+        return this.value
+    }
+}
+
+class App {
+    public static main(): Void {
+        const box: Box<Int> = Box.new<Int>(1)
+        const value: Int = box.get()
+    }
+}
+"""
+            )
+        )
+
+        self.assertIn("struct Box_Int {", source)
+        self.assertIn("int value;", source)
+        self.assertIn("struct Box_Int* Box_Int_new(int value)", source)
+        self.assertIn("int Box_Int_get(struct Box_Int* this)", source)
+        self.assertIn("struct Box_Int* box = Box_Int_new(1);", source)
+        self.assertIn("int value = Box_Int_get(box);", source)
+        self.assertIn("_forge_free_Box_Int(box);", source)
 
     def test_emits_instance_method_with_hidden_this_parameter(self) -> None:
         source = emit_c(

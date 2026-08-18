@@ -20,7 +20,7 @@ public template apply<T:struct>(defs: T): Void {
 
     #for Reflection.type<T>().fields as field {
         #{
-            const serviceType = field.type.serviceType
+            const serviceType = field.type.firstArgumentOrSelf
             const service = serviceType.name
 
             if state.defs.contains(service) {

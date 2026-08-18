@@ -2,6 +2,7 @@
 
 from .nodes import (
     IrAssignment,
+    IrArrayAllocation,
     IrArrayDestructuring,
     IrArrayBulkCall,
     IrArrayLiteral,
@@ -54,6 +55,7 @@ from .nodes import (
 
 __all__ = [
     "IrAssignment",
+    "IrArrayAllocation",
     "IrArrayDestructuring",
     "IrArrayBulkCall",
     "IrArrayLiteral",

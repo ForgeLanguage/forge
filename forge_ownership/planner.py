@@ -11,6 +11,7 @@ from typing import Literal
 
 from forge_ir import (
     IrAssignment,
+    IrArrayAllocation,
     IrArrayLiteral,
     IrArrayPatternCheck,
     IrBinary,
@@ -184,7 +185,7 @@ class OwnershipPlan:
         if self.allocating_array_call(expression):
             return True
         if (
-            isinstance(expression, IrArrayLiteral)
+            isinstance(expression, (IrArrayLiteral, IrArrayAllocation))
             and isinstance(expression.type, ArrayType)
             and expression.type.size is None
         ):

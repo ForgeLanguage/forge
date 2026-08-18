@@ -30,6 +30,7 @@ from forge_parser import (
     ForExpression,
     ForwardExpression,
     FunctionDeclaration,
+    GenericTypeExpression,
     GroupingExpression,
     IdentifierExpression,
     IfStatement,
@@ -334,6 +335,8 @@ class _Validator:
 
         self._function_stack.append(declaration)
         self._push_scope("function", declaration)
+        for parameter in declaration.type_parameters:
+            self._declare(parameter.name, "type_parameter", parameter, parameter.location)
         for parameter in declaration.parameters:
             self._visit_parameter(parameter)
         if declaration.return_type is not None:
@@ -489,6 +492,10 @@ class _Validator:
             return
         if isinstance(expression, GroupingExpression):
             self._visit_expression(expression.expression)
+        elif isinstance(expression, GenericTypeExpression):
+            self._visit_expression(expression.receiver)
+            for argument in expression.arguments:
+                self._visit_type_reference(argument)
         elif isinstance(expression, ForwardExpression):
             if not self._function_stack:
                 self._error("'forward' can only be used inside a function", expression.location)
@@ -524,6 +531,8 @@ class _Validator:
             self._visit_expression(expression.then_expression)
             self._visit_expression(expression.else_expression)
         elif isinstance(expression, CallExpression):
+            for type_argument in expression.type_arguments:
+                self._visit_type_reference(type_argument)
             self._visit_expression(expression.callee)
             for argument in expression.arguments:
                 self._visit_expression(argument)

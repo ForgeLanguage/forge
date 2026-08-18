@@ -152,6 +152,7 @@ INT = BuiltinType("Int")
 DOUBLE = BuiltinType("Double")
 BOOL = BuiltinType("Bool")
 STRING = BuiltinType("String")
+ARRAY = BuiltinType("Array")
 PATTERN_MISMATCH = BuiltinType("PatternMismatch")
 VOID = BuiltinType("Void")
 NULL = BuiltinType("Null")
@@ -199,6 +200,8 @@ def builtin_type(name: str) -> BuiltinType:
         return BOOL
     if canonical == "String":
         return STRING
+    if canonical == "Array":
+        return ARRAY
     if canonical == "PatternMismatch":
         return PATTERN_MISMATCH
     if canonical == "Void":
@@ -261,6 +264,32 @@ def specialize_type(type_: Type, substitutions: dict[int, Type]) -> Type:
         if result == type_.result_type:
             return type_
         return TaskCollectionType(f"TaskCollection<{result.display_name}>", result)
+    if isinstance(type_, FunctionType):
+        parameter_types = tuple(
+            specialize_type(parameter_type, substitutions)
+            for parameter_type in type_.parameter_types
+        )
+        return_type = specialize_type(type_.return_type, substitutions)
+        outcomes = tuple(
+            OutcomeType(specialize_type(outcome.type, substitutions), outcome.required)
+            for outcome in type_.outcomes
+        )
+        if (
+            parameter_types == type_.parameter_types
+            and return_type == type_.return_type
+            and outcomes == type_.outcomes
+        ):
+            return type_
+        return FunctionType(
+            type_.name,
+            parameter_types,
+            return_type,
+            type_.parameter_ownership,
+            type_.parameter_lazy,
+            outcomes,
+            type_.return_ownership,
+            type_.return_borrow_source,
+        )
     if isinstance(type_, ClassType):
         arguments = tuple(specialize_type(argument, substitutions) for argument in type_.type_arguments)
         if arguments == type_.type_arguments:

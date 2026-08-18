@@ -31,6 +31,7 @@ from forge_parser import (
     ForStatement,
     ForExpression,
     ForwardExpression,
+    GenericTypeExpression,
     FunctionDeclaration,
     GroupingExpression,
     IdentifierExpression,
@@ -68,6 +69,7 @@ from forge_resolution import (
 )
 
 from .types import (
+    ARRAY,
     BOOL,
     DOUBLE,
     INT,
@@ -781,6 +783,8 @@ class _TypeChecker:
                 expression,
                 self._task_outcomes_of(expression.expression),
             )
+        elif isinstance(expression, GenericTypeExpression):
+            result = self._generic_type_expression_type(expression)
         elif isinstance(expression, ForwardExpression):
             result = self._forward_type(expression)
         elif isinstance(expression, CatchExpression):
@@ -1190,6 +1194,41 @@ class _TypeChecker:
             return ClassType(symbol.node.name or "<anonymous class>", class_symbol)
         return UNKNOWN
 
+    def _generic_type_expression_type(self, expression: GenericTypeExpression) -> Type:
+        receiver_type = self._visit_expression(expression.receiver)
+        if not isinstance(receiver_type, (ClassType, StructType, InterfaceType)):
+            if not is_unknown(receiver_type):
+                self._error(
+                    f"Type arguments cannot be applied to {receiver_type.display_name}",
+                    expression,
+                )
+            return UNKNOWN
+        declaration = receiver_type.symbol.node if receiver_type.symbol is not None else None
+        parameters = (
+            declaration.type_parameters
+            if isinstance(declaration, ClassDeclaration)
+            else ()
+        )
+        if not parameters:
+            self._error(
+                f"Type {receiver_type.display_name} does not accept type arguments",
+                expression,
+            )
+            return receiver_type
+        if len(expression.arguments) != len(parameters):
+            self._error(
+                f"Expected {len(parameters)} type arguments for {receiver_type.display_name}, "
+                f"got {len(expression.arguments)}",
+                expression,
+            )
+            return receiver_type
+        arguments = tuple(self._type_from_reference(argument) for argument in expression.arguments)
+        if isinstance(receiver_type, ClassType):
+            return ClassType(receiver_type.name, receiver_type.symbol, arguments)
+        if isinstance(receiver_type, StructType):
+            return StructType(receiver_type.name, receiver_type.symbol, arguments)
+        return InterfaceType(receiver_type.name, receiver_type.symbol, arguments)
+
     def _unary_type(self, expression: UnaryExpression) -> Type:
         if expression.operator is TokenKind.AWAIT:
             operand = self._with_preferred_async_call(
@@ -1364,7 +1403,10 @@ class _TypeChecker:
         return UNKNOWN
 
     def _call_type(self, expression: CallExpression) -> Type:
+        if self._is_array_new_call(expression):
+            return self._array_new_call_type(expression)
         callee_type = self._visit_expression(expression.callee)
+        callee_type = self._specialized_constructor_call_type(expression, callee_type)
         if self._is_task_await_method_call(expression) and self._inside_async_function():
             self._error(
                 "Task.await() cannot be used inside an async function; use the await operator",
@@ -1440,6 +1482,154 @@ class _TypeChecker:
         if isinstance(callee_type.return_type, (TaskType, TaskCollectionType)):
             self._set_task_outcomes(expression, callee_task_outcomes)
         return callee_type.return_type
+
+    def _specialized_constructor_call_type(
+        self,
+        expression: CallExpression,
+        callee_type: Type,
+    ) -> Type:
+        if not expression.type_arguments:
+            return callee_type
+        if (
+            not isinstance(expression.callee, MemberExpression)
+            or expression.callee.member != "new"
+            or not isinstance(callee_type, FunctionType)
+        ):
+            return callee_type
+        receiver_type = self.types.type_of(expression.callee.receiver)
+        if receiver_type is None:
+            receiver_type = self._visit_expression(expression.callee.receiver)
+        if not isinstance(receiver_type, ClassType) or receiver_type.symbol is None:
+            return callee_type
+        declaration = receiver_type.symbol.node
+        if not isinstance(declaration, ClassDeclaration) or not declaration.type_parameters:
+            return callee_type
+        if len(expression.type_arguments) != len(declaration.type_parameters):
+            self._error(
+                f"Expected {len(declaration.type_parameters)} type arguments for {receiver_type.display_name}, "
+                f"got {len(expression.type_arguments)}",
+                expression,
+            )
+            return callee_type
+        arguments = tuple(self._type_from_reference(argument) for argument in expression.type_arguments)
+        specialized_receiver = ClassType(receiver_type.name, receiver_type.symbol, arguments)
+        substitutions = self._type_parameter_substitutions(specialized_receiver)
+        result = specialize_type(callee_type, substitutions)
+        if isinstance(result, FunctionType):
+            result = FunctionType(
+                result.name,
+                result.parameter_types,
+                specialized_receiver,
+                result.parameter_ownership,
+                result.parameter_lazy,
+                result.outcomes,
+                result.return_ownership,
+                result.return_borrow_source,
+            )
+            self.types.expressions[id(expression.callee)] = result
+        return result
+
+    def _is_array_new_call(self, expression: CallExpression) -> bool:
+        if not isinstance(expression.callee, MemberExpression):
+            return False
+        if expression.callee.member != "new":
+            return False
+        receiver_type = self.types.type_of(expression.callee.receiver)
+        if receiver_type is None:
+            receiver_type = self._visit_expression(expression.callee.receiver)
+        return receiver_type == ARRAY and self._is_class_receiver(expression.callee.receiver)
+
+    def _array_new_call_type(self, expression: CallExpression) -> Type:
+        self.types.expressions[id(expression.callee)] = FunctionType("new", (INT,), UNKNOWN)
+        if len(expression.type_arguments) != 1:
+            self._error("Array.new requires exactly one type argument", expression)
+            for argument in expression.arguments:
+                self._visit_expression(argument)
+            self._set_outcomes(expression, self._call_child_outcomes(expression))
+            return UNKNOWN
+        element_type = self._array_new_element_type(expression.type_arguments[0])
+        result = ArrayType(f"{element_type.name}[]", element_type)
+        if len(expression.arguments) != 1:
+            for argument in expression.arguments:
+                self._visit_expression(argument)
+            self._set_outcomes(expression, self._call_child_outcomes(expression))
+            self._error(
+                f"Expected 1 arguments for Array.new, got {len(expression.arguments)}",
+                expression,
+            )
+            return result
+        capacity_type = self._visit_expression(expression.arguments[0])
+        self._check_assignable(capacity_type, INT, expression.arguments[0])
+        self._set_outcomes(expression, self._call_child_outcomes(expression))
+        return result
+
+    def _array_new_element_type(self, reference: TypeReference) -> Type:
+        resolved = self.resolution.resolutions.symbol_for(reference)
+        if resolved is not None:
+            return self._type_from_reference(reference)
+        if reference.name in {
+            "Byte",
+            "UByte",
+            "Short",
+            "UShort",
+            "Int",
+            "UInt",
+            "Long",
+            "ULong",
+            "Float",
+            "Double",
+            "Bool",
+            "String",
+            "byte",
+            "ubyte",
+            "short",
+            "ushort",
+            "int",
+            "uint",
+            "long",
+            "ulong",
+            "float",
+            "double",
+            "bool",
+            "string",
+        }:
+            return apply_type_modifiers(
+                builtin_type(reference.name),
+                array_depth=reference.array_depth,
+                nullable=reference.nullable,
+            )
+        for declaration in reversed(self._function_stack):
+            for parameter in declaration.type_parameters:
+                if parameter.name == reference.name:
+                    symbol = self.resolution.analysis.annotations.symbol_for(parameter)
+                    return TypeParameterType(parameter.name, symbol)
+        for declaration in reversed(self._class_stack):
+            for parameter in declaration.type_parameters:
+                if parameter.name == reference.name:
+                    symbol = self.resolution.analysis.annotations.symbol_for(parameter)
+                    return TypeParameterType(parameter.name, symbol)
+        scope = self.resolution.analysis.annotations.scope_for(reference)
+        while scope is not None:
+            symbol = scope.symbols.get(reference.name)
+            if (
+                isinstance(symbol, Symbol)
+                and isinstance(symbol.node, ClassDeclaration)
+                and symbol.kind in {"class", "struct", "interface"}
+            ):
+                if symbol.node.kind == "struct":
+                    base: Type = StructType(symbol.name, symbol)
+                elif symbol.node.kind == "interface":
+                    base = InterfaceType(symbol.name, symbol)
+                else:
+                    base = ClassType(symbol.name, symbol)
+                return apply_type_modifiers(
+                    base,
+                    array_depth=reference.array_depth,
+                    nullable=reference.nullable,
+                )
+            scope = scope.parent
+        self._error(f"Unknown type '{reference.name}'", reference)
+        return UNKNOWN
 
     def _is_lazy_argument(self, argument: Expression) -> bool:
         if not isinstance(argument, IdentifierExpression):
@@ -1871,6 +2061,14 @@ class _TypeChecker:
             )
             return UNKNOWN
         if isinstance(receiver_type, BuiltinType):
+            if receiver_type == ARRAY:
+                if expression.member == "new" and self._is_class_receiver(expression.receiver):
+                    return FunctionType("new", (INT,), UNKNOWN)
+                self._error(
+                    f"Type {receiver_type.display_name} has no member '{expression.member}'",
+                    expression,
+                )
+                return UNKNOWN
             if receiver_type == STRING:
                 is_static = self._is_class_receiver(expression.receiver)
                 intrinsic = string_intrinsic(expression.member, static=is_static)
@@ -1935,7 +2133,11 @@ class _TypeChecker:
                 return UNKNOWN
             self._check_member_receiver_kind(expression, member_symbol)
             self._selected_symbols[id(expression)] = member_symbol
-            return self._member_symbol_type(member_symbol, struct_declaration)
+            return self._specialized_member_symbol_type(
+                member_symbol,
+                struct_declaration,
+                receiver_type,
+            )
         if isinstance(receiver_type, InterfaceType) and receiver_type.symbol is not None:
             interface_declaration = receiver_type.symbol.node
             if not isinstance(interface_declaration, ClassDeclaration):
@@ -1963,6 +2165,8 @@ class _TypeChecker:
         member_symbol = class_scope.symbols.get(expression.member)
         if member_symbol is None:
             member_symbol = self._used_trait_member_symbol(class_declaration, expression.member)
+        if member_symbol is None and expression.member == "new" and self._is_class_receiver(expression.receiver):
+            return FunctionType("new", (), receiver_type)
         if member_symbol is None:
             self._error(
                 f"Type {receiver_type.display_name} has no member '{expression.member}'",
@@ -1971,7 +2175,11 @@ class _TypeChecker:
             return UNKNOWN
         self._check_member_receiver_kind(expression, member_symbol)
         self._selected_symbols[id(expression)] = member_symbol
-        return self._member_symbol_type(member_symbol, class_declaration)
+        return self._specialized_member_symbol_type(
+            member_symbol,
+            class_declaration,
+            receiver_type,
+        )
 
     def _used_trait_member_symbol(
         self,
@@ -2026,7 +2234,7 @@ class _TypeChecker:
         ) or isinstance(resolved, BuiltinSymbol) or (
             isinstance(resolved, SpecialSymbol)
             and resolved.kind == "self"
-        )
+        ) or isinstance(expression, GenericTypeExpression)
 
     def _intrinsic_type(self, name: str) -> Type:
         if name.endswith("[]"):
@@ -2065,6 +2273,36 @@ class _TypeChecker:
         else:
             result = UNKNOWN
         self.types.symbols[id(member_symbol.node)] = result
+        return result
+
+    def _specialized_member_symbol_type(
+        self,
+        member_symbol: Symbol,
+        class_declaration: ClassDeclaration | EnumDeclaration,
+        receiver_type: ClassType | StructType | InterfaceType,
+    ) -> Type:
+        result = self._member_symbol_type(member_symbol, class_declaration)
+        if not isinstance(class_declaration, ClassDeclaration):
+            return result
+        substitutions = self._type_parameter_substitutions(receiver_type)
+        if not substitutions:
+            return result
+        result = specialize_type(result, substitutions)
+        if (
+            isinstance(result, FunctionType)
+            and isinstance(member_symbol.node, FunctionDeclaration)
+            and member_symbol.node.kind == "new"
+        ):
+            return FunctionType(
+                result.name,
+                result.parameter_types,
+                receiver_type,
+                result.parameter_ownership,
+                result.parameter_lazy,
+                result.outcomes,
+                result.return_ownership,
+                result.return_borrow_source,
+            )
         return result
 
     def _index_type(self, expression: IndexExpression) -> Type:
@@ -2113,7 +2351,7 @@ class _TypeChecker:
         elif isinstance(resolved, Symbol) and resolved.kind == "type_parameter":
             base = TypeParameterType(resolved.name, resolved)
         else:
-            base = UNKNOWN
+            base = self._unresolved_type_reference_fallback(reference)
         if reference.arguments and not isinstance(base, (TaskType, TaskCollectionType)):
             declaration = None
             if isinstance(base, (ClassType, StructType, InterfaceType)) and base.symbol is not None:
@@ -2153,6 +2391,48 @@ class _TypeChecker:
         )
         self.types.type_references[id(reference)] = result
         return result
+
+    def _unresolved_type_reference_fallback(self, reference: TypeReference) -> Type:
+        if reference.name in {
+            "Byte",
+            "UByte",
+            "Short",
+            "UShort",
+            "Int",
+            "UInt",
+            "Long",
+            "ULong",
+            "Float",
+            "Double",
+            "Bool",
+            "String",
+            "Void",
+            "byte",
+            "ubyte",
+            "short",
+            "ushort",
+            "int",
+            "uint",
+            "long",
+            "ulong",
+            "float",
+            "double",
+            "bool",
+            "string",
+            "void",
+        }:
+            return builtin_type(reference.name)
+        for declaration in reversed(self._function_stack):
+            for parameter in declaration.type_parameters:
+                if parameter.name == reference.name:
+                    symbol = self.resolution.analysis.annotations.symbol_for(parameter)
+                    return TypeParameterType(parameter.name, symbol)
+        for declaration in reversed(self._class_stack):
+            for parameter in declaration.type_parameters:
+                if parameter.name == reference.name:
+                    symbol = self.resolution.analysis.annotations.symbol_for(parameter)
+                    return TypeParameterType(parameter.name, symbol)
+        return UNKNOWN
 
     def _task_type_from_reference(self, reference: TypeReference) -> Type:
         if len(reference.arguments) != 1:

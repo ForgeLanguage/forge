@@ -226,6 +226,12 @@ class IrArrayPatternCheck(IrExpression):
 
 
 @dataclass(frozen=True, slots=True)
+class IrArrayAllocation(IrExpression):
+    capacity: IrExpression
+    type: Type
+
+
+@dataclass(frozen=True, slots=True)
 class IrBinary(IrExpression):
     left: IrExpression
     operator: TokenKind

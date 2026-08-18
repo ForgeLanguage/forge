@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from forge_analysis import Diagnostic, Symbol
 from forge_lexer import TokenKind
 from forge_ir import (
     IrAssignment,
+    IrArrayAllocation,
     IrArrayDestructuring,
     IrArrayBulkCall,
     IrArrayLiteral,
@@ -80,6 +81,7 @@ from forge_parser import (
     ForStatement,
     ForwardExpression,
     FunctionDeclaration,
+    GenericTypeExpression,
     GroupingExpression,
     IdentifierExpression,
     IfStatement,
@@ -109,6 +111,7 @@ from forge_normalizer import normalize
 from forge_resolution import BuiltinInterfaceSymbol, BuiltinSymbol, SpecialSymbol
 from forge_safety import BindingState, SafetyCheckResult, check_safety
 from forge_typecheck import (
+    ARRAY,
     ArrayType,
     BOOL,
     ClassType,
@@ -479,6 +482,14 @@ class _Lowerer:
             self.safety.safety.state_of_symbol(symbol),
         )
 
+    def _is_array_new_call(self, expression: CallExpression) -> bool:
+        if not isinstance(expression.callee, MemberExpression):
+            return False
+        if expression.callee.member != "new":
+            return False
+        receiver_type = self._type_of(expression.callee.receiver)
+        return receiver_type == ARRAY and isinstance(expression.callee.receiver, IdentifierExpression)
+
     def _lower_function_body(self, declaration: FunctionDeclaration) -> IrBlock:
         if declaration.body is None:
             return IrBlock(declaration.location, ())
@@ -677,6 +688,9 @@ class _Lowerer:
                 self.safety.safety.state_of_symbol(symbol),
                 self._task_outcomes_of(expression),
             )
+        if isinstance(expression, GenericTypeExpression):
+            type_ = self._type_of(expression)
+            return IrBuiltinRef(expression.location, type_.display_name, type_)
         if isinstance(expression, ThisExpression):
             return IrSpecialRef(expression.location, "this", self._type_of(expression))
         if isinstance(expression, SelfExpression):
@@ -780,9 +794,15 @@ class _Lowerer:
                 type_,
             )
         if isinstance(expression, CallExpression):
+            if self._is_array_new_call(expression):
+                return IrArrayAllocation(
+                    expression.location,
+                    self._lower_expression(expression.arguments[0]),
+                    self._type_of(expression),
+                )
             return IrCall(
                 expression.location,
-                self._lower_expression(expression.callee),
+                self._lower_call_callee(expression),
                 tuple(self._lower_expression(argument) for argument in expression.arguments),
                 self._type_of(expression),
                 self._task_outcomes_of(expression),
@@ -909,6 +929,32 @@ class _Lowerer:
                 self._type_of(expression),
             )
         raise TypeError(f"Unsupported expression {type(expression).__name__}")
+
+    def _lower_call_callee(self, expression: CallExpression) -> IrExpression:
+        callee = self._lower_expression(expression.callee)
+        if (
+            not expression.type_arguments
+            or not isinstance(expression.callee, MemberExpression)
+            or expression.callee.member != "new"
+            or not isinstance(callee, IrMember)
+            or not isinstance(callee.receiver.type, ClassType)
+        ):
+            return callee
+        receiver_type = callee.receiver.type
+        if receiver_type.symbol is None:
+            return callee
+        declaration = receiver_type.symbol.node
+        if not isinstance(declaration, ClassDeclaration) or len(expression.type_arguments) != len(declaration.type_parameters):
+            return callee
+        arguments = tuple(
+            self._type_from_reference(argument)
+            for argument in expression.type_arguments
+        )
+        specialized_receiver = replace(
+            callee.receiver,
+            type=ClassType(receiver_type.name, receiver_type.symbol, arguments),
+        )
+        return replace(callee, receiver=specialized_receiver)
 
     def _lower_catch_expression(
         self,

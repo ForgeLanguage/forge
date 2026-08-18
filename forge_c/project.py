@@ -383,7 +383,14 @@ void* _forge_realloc(void* pointer, size_t size) {
 }
 
 void* _forge_array_new(size_t capacity, size_t element_size) {
-    return capacity == 0 ? NULL : _forge_alloc(element_size * capacity);
+    if (capacity == 0) {
+        return NULL;
+    }
+    void* result = calloc(capacity, element_size);
+    if (result == NULL) {
+        abort();
+    }
+    return result;
 }
 
 void _forge_array_grow(void** data, size_t* cap, size_t element_size) {

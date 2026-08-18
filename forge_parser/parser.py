@@ -33,6 +33,7 @@ from .ast import (
     ForStatement,
     ForExpression,
     ForwardExpression,
+    GenericTypeExpression,
     FunctionDeclaration,
     GroupingExpression,
     IdentifierExpression,
@@ -414,6 +415,7 @@ class Parser:
             class_declaration.kind,
             tuple(implements),
             tuple(uses),
+            class_declaration.type_parameters,
         )
         return (*prefix, *suffix, folded)
 
@@ -1143,9 +1145,13 @@ class Parser:
                 expression = self._finish_call(expression)
             elif self._check(TokenKind.LESS):
                 generic_call = self._try_generic_call(expression)
-                if generic_call is None:
+                if generic_call is not None:
+                    expression = generic_call
+                    continue
+                generic_receiver = self._try_generic_type_expression(expression)
+                if generic_receiver is None:
                     return expression
-                expression = generic_call
+                expression = generic_receiver
             elif self._match(TokenKind.DOT, TokenKind.NULL_SAFE_DOT):
                 operator = self._previous()
                 if self._match(TokenKind.LEFT_BRACE):
@@ -1213,7 +1219,7 @@ class Parser:
     def _ensure_assignment_target(self, expression: Expression, operator: Token) -> None:
         if isinstance(
             expression,
-            (IdentifierExpression, MemberExpression, IndexExpression),
+            (IdentifierExpression, MemberExpression, IndexExpression, BulkCallExpression),
         ):
             return
         raise ParserError("Invalid assignment target", operator.location)
@@ -1251,6 +1257,22 @@ class Parser:
                         break
             self._consume(TokenKind.RIGHT_PAREN, "Expected ')' after arguments")
             return CallExpression(callee.location, callee, tuple(arguments), tuple(type_arguments))
+        except ParserError:
+            self._current = checkpoint
+            return None
+
+    def _try_generic_type_expression(self, receiver: Expression) -> GenericTypeExpression | None:
+        checkpoint = self._current
+        try:
+            self._consume(TokenKind.LESS, "Expected '<' before type arguments")
+            type_arguments = [self._type_reference()]
+            while self._match(TokenKind.COMMA):
+                type_arguments.append(self._type_reference())
+            self._consume(TokenKind.GREATER, "Expected '>' after type arguments")
+            if not self._check(TokenKind.DOT) and not self._check(TokenKind.NULL_SAFE_DOT):
+                self._current = checkpoint
+                return None
+            return GenericTypeExpression(receiver.location, receiver, tuple(type_arguments))
         except ParserError:
             self._current = checkpoint
             return None

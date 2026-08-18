@@ -2,6 +2,7 @@
 
 from .checker import TypeCheckError, TypeCheckResult, TypeTable, check_types
 from .types import (
+    ARRAY,
     BOOL,
     DOUBLE,
     INT,
@@ -27,6 +28,7 @@ from .types import (
 
 __all__ = [
     "ArrayType",
+    "ARRAY",
     "BOOL",
     "BuiltinType",
     "ClassType",

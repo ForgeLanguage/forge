@@ -31,6 +31,7 @@ from forge_parser import (
     ForExpression,
     ForwardExpression,
     FunctionDeclaration,
+    GenericTypeExpression,
     GroupingExpression,
     IdentifierExpression,
     IfStatement,
@@ -575,6 +576,8 @@ class _SafetyChecker:
             return
         elif isinstance(expression, GroupingExpression):
             self._visit_expression(expression.expression)
+        elif isinstance(expression, GenericTypeExpression):
+            self._visit_expression(expression.receiver)
         elif isinstance(expression, ForwardExpression):
             self._visit_expression(expression.expression)
         elif isinstance(expression, CatchExpression):
