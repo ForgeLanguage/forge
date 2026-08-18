@@ -42,7 +42,7 @@ const user = await fetchUser(42)
 Следующий код недопустим:
 
 ```forge
-public func loadUser(id: Int): User {
+public loadUser(id: Int): User {
     const user = await fetchUser(id)
     return user
 }
@@ -73,7 +73,7 @@ const user = fetchUser(42).await()
 Например:
 
 ```forge
-public func loadUser(id: Int): User {
+public loadUser(id: Int): User {
     return fetchUser(id).await()
 }
 ```
@@ -227,7 +227,7 @@ const user = await safeFetchUser(42)
 Библиотеки могут предоставлять как синхронную, так и асинхронную версию одной операции.
 
 ```forge
-public func readText(path: String): String, IoError!
+public readText(path: String): String, IoError!
 ```
 
 ```forge
@@ -263,7 +263,7 @@ public async readText(path: String): String, IoError! {
 эквивалентна:
 
 ```forge
-public func readText(path: String): String, IoError! {
+public readText(path: String): String, IoError! {
     return readText(path).await()
 }
 ```
@@ -358,25 +358,25 @@ public readText(path: String): String, !IoError {
 
 ### Текущий C backend
 
-Текущий runtime-инкремент C backend поддерживает `async func` и
-`async native func` как async-first boundary.
+Текущий runtime-инкремент C backend поддерживает `async` и
+`async native` функции как async-first boundary.
 
 ```forge
-async native func readNative(path: String): String = "forge_read_text"
+async native readNative(path: String): String = "forge_read_text"
 
-func load(path: String): String {
+load(path: String): String {
     return readNative(path).await()
 }
 ```
 
 Для прямого async-вызова с непосредственным `await` backend создаёт runtime
 task, отправляет её в event loop thread, ожидает завершения и берёт результат
-из task context. Это означает, что тело `async func` или blocking native IO
+из task context. Это означает, что тело `async` функции или blocking native IO
 выполняется не в вызывающем потоке.
 
 Текущий инкремент намеренно узкий:
 
-* поддерживаются top-level `async func` и `async native func`;
+* поддерживаются top-level `async` и `async native` функции;
 * настоящий runtime task создаётся для прямого `call(...).await()` или
   `await call(...)`;
 * локальное сохранение `Task<T>` из async-вызова сразу запускает
@@ -388,7 +388,7 @@ task, отправляет её в event loop thread, ожидает завер�
 * `TaskCollection<T>.any()`, `.first()` и `.last()` также ожидают runtime
   task handles и возвращают соответствующий результат.
 
-Ограничение текущего C backend: `await` внутри тела `async func` пока
+Ограничение текущего C backend: `await` внутри тела `async` функции пока
 реализован как блокирующее ожидание runtime task. Полная coroutine-семантика
 с suspension/resume внутри event loop является следующим архитектурным слоем.
 

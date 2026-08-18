@@ -6,10 +6,10 @@
 
 # 1. Функция
 
-Функция объявляется через `func`.
+Функция объявляется именем и списком параметров. Ключевое слово `func` в объявлении не используется и является ошибкой.
 
 ```forge
-public static func greet(name: String): Void {
+public static greet(name: String): Void {
     print "Hello, " + name + "!"
 }
 ```
@@ -17,7 +17,7 @@ public static func greet(name: String): Void {
 Синтаксис:
 
 ```
-[access] [static] func name(parameters): returnType {
+[access] [static] name(parameters): returnType {
     ...
 }
 ```
@@ -35,7 +35,7 @@ name: type
 Можно передавать несколько параметров:
 
 ```forge
-public static func add(a: Int, b: Int): Int {
+public static add(a: Int, b: Int): Int {
     return a + b
 }
 ```
@@ -43,7 +43,7 @@ public static func add(a: Int, b: Int): Int {
 Параметр класса по умолчанию является borrow. Если функция должна принять владение объектом, перед именем параметра указывается `take`:
 
 ```forge
-public func setProfile(take profile: Profile): Void {
+public setProfile(take profile: Profile): Void {
     this.profile = profile
 }
 ```
@@ -63,7 +63,7 @@ user.setProfile(move profile)
 Тип возвращаемого значения указывается после `:`.
 
 ```forge
-public static func multiply(a: Int, b: Int): Int {
+public static multiply(a: Int, b: Int): Int {
     return a * b
 }
 ```
@@ -77,7 +77,7 @@ public static func multiply(a: Int, b: Int): Int {
 Метод без `static` принадлежит объекту.
 
 ```forge
-public func sayHello(): Void {
+public sayHello(): Void {
     print "Hello, " + this.name
 }
 ```
@@ -98,7 +98,7 @@ this.sayHello()
 `static` методы принадлежат классу.
 
 ```forge
-public static func version(): String {
+public static version(): String {
     return "1.0"
 }
 ```
@@ -125,13 +125,13 @@ self.version()
 Если функция состоит из одного выражения, можно использовать сокращённую запись:
 
 ```forge
-public static func square(x: Int): Int => x * x
+public static square(x: Int): Int => x * x
 ```
 
 Это эквивалентно:
 
 ```forge
-public static func square(x: Int): Int {
+public static square(x: Int): Int {
     return x * x
 }
 ```
@@ -199,7 +199,7 @@ const rows = catch Csv.parseStream {
 ```forge
 class
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: App = App.new(args)
     app.run()
 }
@@ -210,18 +210,18 @@ public new(args: String[]) {
     this.args = args
 }
 
-public func run(): Void {
+public run(): Void {
     this.printArguments()
     this.repeatGreeting(3)
 }
 
-public func printArguments(): Void {
+public printArguments(): Void {
     for this.args as i, name {
         print i + ": " + name
     }
 }
 
-public func repeatGreeting(n: Int): Void {
+public repeatGreeting(n: Int): Void {
     for n as i {
         print "Hello #" + i
     }

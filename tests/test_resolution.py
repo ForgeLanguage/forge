@@ -15,7 +15,7 @@ class NameResolutionTests(unittest.TestCase):
         program = parse(
             """
 const value = 1
-func main(value: Int): Int {
+main(value: Int): Int {
     const local = value
     return local
 }
@@ -39,11 +39,11 @@ func main(value: Int): Int {
     def test_resolves_forward_function_reference(self) -> None:
         program = parse(
             """
-func main(): Int {
+main(): Int {
     return answer()
 }
 
-func answer(): Int => 42
+answer(): Int => 42
 """
         )
 
@@ -86,7 +86,7 @@ const pending: Task<User>
     def test_resolves_pattern_mismatch_as_builtin_catch_type(self) -> None:
         program = parse(
             """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first] = catch values {
         issue: PatternMismatch => { return }
     }
@@ -115,8 +115,8 @@ func main(values: Int[]): Void {
         program = parse(
             """
 class App {
-    static func version(): String => self.name
-    func rename(name: String): Void {
+    static version(): String => self.name
+    rename(name: String): Void {
         this.name = name
     }
 }
@@ -138,7 +138,7 @@ class App {
         program = parse(
             """
 class Node {
-    func same(other: self): self {
+    same(other: self): self {
         return other
     }
 }
@@ -157,7 +157,7 @@ class Node {
         self.assertEqual(result.resolutions.symbol_for(return_type).node, class_declaration)
 
     def test_reports_self_type_outside_class(self) -> None:
-        result = resolve(parse("func make(): self => null"), raise_on_error=False)
+        result = resolve(parse("make(): self => null"), raise_on_error=False)
 
         self.assertEqual(
             result.diagnostics[0].message,

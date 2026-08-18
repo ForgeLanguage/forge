@@ -19,7 +19,7 @@ class CEmitterTests(unittest.TestCase):
         source = emit_c(
             parse(
                 """
-func add(left: Int, right: Int): Int => left + right
+add(left: Int, right: Int): Int => left + right
 const result: Int = add(1, 2)
 """
             )
@@ -36,7 +36,7 @@ int result = add(1, 2);
         )
 
     def test_emits_print_with_stdio_include(self) -> None:
-        source = emit_c(parse('func main(): Void { print "Hello" }'))
+        source = emit_c(parse('main(): Void { print "Hello" }'))
 
         self.assertEqual(
             source,
@@ -64,7 +64,7 @@ bool enabled = true;
         source = emit_c(
             parse(
                 """
-func value(): Int {
+value(): Int {
     lazy delayed = 1 + 2
     print delayed
     return delayed
@@ -83,8 +83,8 @@ func value(): Int {
         source = emit_c(
             parse(
                 """
-func pick(flag: Bool): Int {
-    let value: Int = 0
+pick(flag: Bool): Int {
+    var value: Int = 0
     if flag {
         value = 1
     } else {
@@ -116,8 +116,8 @@ int pick(bool flag) {
         source = emit_c(
             parse(
                 """
-func count(): Int {
-    let value: Int = 1
+count(): Int {
+    var value: Int = 1
     value += 2
     value++;
     --value
@@ -135,8 +135,8 @@ func count(): Int {
         source = emit_c(
             parse(
                 """
-func pick(status: Int): Int {
-    let value: Int = 0
+pick(status: Int): Int {
+    var value: Int = 0
     switch status {
         1 => {
             value = 10
@@ -181,8 +181,8 @@ switch classify(len: Int): String {
         source = emit_c(
             parse(
                 """
-func count(): Int {
-    let value: Int = 0
+count(): Int {
+    var value: Int = 0
     while value < 3 {
         value = value + 1
     }
@@ -201,7 +201,7 @@ func count(): Int {
         source = emit_c(
             parse(
                 """
-func first(): Int {
+first(): Int {
     const values: Int[] = [1, 2]
     const index = 1
     return values[index]
@@ -223,7 +223,7 @@ func first(): Int {
         source = emit_c(
             parse(
                 """
-func count(): Int {
+count(): Int {
     const values: Int[] = [1, 2]
     return values.len
 }
@@ -237,7 +237,7 @@ func count(): Int {
         source = emit_c(
             parse(
                 """
-func first(): Int {
+first(): Int {
     const values: Int[2] = [1, 2]
     return values[0]
 }
@@ -263,7 +263,7 @@ func first(): Int {
         source = emit_c(
             parse(
                 """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first, second] = catch values {
         issue: PatternMismatch => { return }
     }
@@ -286,8 +286,8 @@ func main(values: Int[]): Void {
         source = emit_c(
             parse(
                 """
-func values(): Int[] => [1, 2]
-func main(): Void {
+values(): Int[] => [1, 2]
+main(): Void {
     const [first, second] = catch values() {
         issue: PatternMismatch => { return }
     }
@@ -315,7 +315,7 @@ func main(): Void {
         source = emit_c(
             parse(
                 """
-func read(values: Int[]): Int {
+read(values: Int[]): Int {
     const [first] = catch values {
         issue: PatternMismatch => { return 0 }
     }
@@ -335,9 +335,9 @@ func read(values: Int[]): Int {
                 """
 class File {
     public new() {}
-    public func ping(): Void { print 1 }
+    public ping(): Void { print 1 }
 }
-func read(files: File[]): Void {
+read(files: File[]): Void {
     const [first] = catch files {
         issue: PatternMismatch => [File.new()]
     }
@@ -369,8 +369,8 @@ func read(files: File[]): Void {
 class File {
     public new() {}
 }
-func load(): File[] => [File.new()]
-func read(fallback: File[]): Void {
+load(): File[] => [File.new()]
+read(fallback: File[]): Void {
     const [first, second] = catch load() {
         issue: PatternMismatch => fallback
     }
@@ -398,7 +398,7 @@ func read(fallback: File[]): Void {
         source = emit_c(
             parse(
                 """
-func read(text: String): String {
+read(text: String): String {
     const [first, second] = catch text.split(",", 2) {
         issue: PatternMismatch => { return "invalid" }
     }
@@ -433,7 +433,7 @@ func read(text: String): String {
         source = emit_c(
             parse(
                 """
-func main(): Void {
+main(): Void {
     const values: Int[2] = [1, 2]
     const [first, second] = values
 }
@@ -451,7 +451,7 @@ func main(): Void {
 class Box {
     public values: Int[2]
 }
-func main(box: Box): Void {
+main(box: Box): Void {
     const [first, second] = box.values
 }
 """
@@ -472,7 +472,7 @@ func main(box: Box): Void {
         source = emit_c(
             parse(
                 """
-func read(rows: Int[2][2]): Int {
+read(rows: Int[2][2]): Int {
     const [first] = rows[0]
     return first
 }
@@ -493,7 +493,7 @@ func read(rows: Int[2][2]): Int {
         source = emit_c(
             parse(
                 """
-func read(flag: Bool, left: Int[2], right: Int[2]): Int {
+read(flag: Bool, left: Int[2], right: Int[2]): Int {
     const [first] = flag ? left : right
     return first
 }
@@ -520,7 +520,7 @@ class File {}
 class Box {
     public files: File[1]
 }
-func main(box: Box): Void {
+main(box: Box): Void {
     const [first] = box.files
 }
 """
@@ -540,7 +540,7 @@ func main(box: Box): Void {
             parse(
                 """
 class File {}
-func read(files: File[1]): Void {
+read(files: File[1]): Void {
     const [first] = catch files {
         issue: PatternMismatch => { return }
     }
@@ -559,7 +559,7 @@ func read(files: File[1]): Void {
             parse(
                 """
 class User {}
-func make(): Void {
+make(): Void {
     const users: User[] = [User.new(), User.new()]
 }
 """
@@ -581,7 +581,7 @@ class Point {
     public new(public x: Int, public y: Int) {}
 }
 
-func make(): Point[] {
+make(): Point[] {
     return Point.new[(1, 2), (3, 4)]
 }
 """
@@ -598,12 +598,12 @@ func make(): Point[] {
                 """
 @multidef
 class Console {
-    public static func write(str: String): Void {
+    public static write(str: String): Void {
         print str
     }
 }
 
-func main(): Void {
+main(): Void {
     Console.write["a"]
 }
 """
@@ -618,12 +618,12 @@ func main(): Void {
                 """
 @multidef
 class Console {
-    public static func write(str: String): Void {
+    public static write(str: String): Void {
         print str
     }
 }
 
-func main(): Void {
+main(): Void {
     Console.write["a", "b"]
 }
 """
@@ -636,8 +636,8 @@ func main(): Void {
         source = emit_c(
             parse(
                 """
-func twice(value: Int): Int => value * 2
-func load(): Int[] {
+twice(value: Int): Int => value * 2
+load(): Int[] {
     const values = [1, 2]
     return twice[values]
 }
@@ -663,10 +663,10 @@ func load(): Int[] {
 class Doubler {
     public new() {}
 
-    public func twice(value: Int): Int => value * 2
+    public twice(value: Int): Int => value * 2
 }
 
-func load(): Int[] {
+load(): Int[] {
     const values = [1, 2]
     const doubler = Doubler.new()
     return doubler.twice[values]
@@ -684,7 +684,7 @@ func load(): Int[] {
                 """
 @multidef
 class Console {
-    public static func write(str: String): Void {
+    public static write(str: String): Void {
         print str
     }
 }
@@ -692,12 +692,12 @@ class Console {
 class Point {
     implements Stringable
 
-    public func toString(): String {
+    public toString(): String {
         return "Point"
     }
 }
 
-func main(points: Point[]): Void {
+main(points: Point[]): Void {
     Console.write[points]
 }
 """
@@ -715,13 +715,13 @@ func main(points: Point[]): Void {
                 """
 @multidef
 interface Runnable {
-    public func run(): Void
+    public run(): Void
 }
 
 trait AppLogic {
     implements Runnable
 
-    public func run(): Void {
+    public run(): Void {
         print "running"
     }
 }
@@ -731,7 +731,7 @@ class App {
     implements Runnable
 }
 
-func main(): Void {
+main(): Void {
     const app = App.new()
     app.run()
 }
@@ -759,8 +759,8 @@ struct Item {
     public name: String
 }
 
-func main(): Void {
-    let item: Item? = null
+main(): Void {
+    var item: Item? = null
     item = { name: "one" }
 }
 """
@@ -774,7 +774,7 @@ func main(): Void {
         self.assertIn("item = forge_tmp_nullable0;", source)
 
     def test_emits_async_function_as_sync_backend_mvp(self) -> None:
-        source = emit_c(parse("async func answer(): Int => 42"))
+        source = emit_c(parse("async answer(): Int => 42"))
 
         self.assertIn("int answer(void)", source)
         self.assertIn("return 42;", source)
@@ -783,8 +783,8 @@ func main(): Void {
         source = emit_c(
             parse(
                 """
-async native func absValue(value: Int): Int = "abs"
-func main(): Void {
+async native absValue(value: Int): Int = "abs"
+main(): Void {
     print absValue(-7).await()
 }
 """
@@ -807,8 +807,8 @@ func main(): Void {
         source = emit_c(
             parse(
                 """
-async native func absValue(value: Int): Int = "abs"
-func main(): Void {
+async native absValue(value: Int): Int = "abs"
+main(): Void {
     const pending = absValue(-7)
     print pending.await()
 }
@@ -830,8 +830,8 @@ func main(): Void {
         source = emit_c(
             parse(
                 """
-async func answer(): Int => 42
-async func load(): Int {
+async answer(): Int => 42
+async load(): Int {
     return await answer()
 }
 """
@@ -850,8 +850,8 @@ async func load(): Int {
         source = emit_c(
             parse(
                 """
-async func answer(): Int => 42
-func load(): Int {
+async answer(): Int => 42
+load(): Int {
     return answer().await()
 }
 """
@@ -873,12 +873,12 @@ func load(): Int {
 class App {
     public new() {}
 
-    public async func run(value: Int): Int {
+    public async run(value: Int): Int {
         return value + 1
     }
 }
 
-func main(): Void {
+main(): Void {
     const app = App.new()
     print app.run(41).await()
 }
@@ -898,7 +898,7 @@ func main(): Void {
                 """
 @multidef
 interface Runner {
-    public async func run(value: Int): Int
+    public async run(value: Int): Int
 }
 
 class App {
@@ -906,12 +906,12 @@ class App {
 
     public new() {}
 
-    public async func run(value: Int): Int {
+    public async run(value: Int): Int {
         return value + 1
     }
 }
 
-func main(): Void {
+main(): Void {
     const runner: Runner = App.new()
     print runner.run(41).await()
 }
@@ -930,7 +930,7 @@ func main(): Void {
                 """
 @multidef
 interface Runner {
-    public async func run(value: Int): Int
+    public async run(value: Int): Int
 }
 
 class App {
@@ -938,12 +938,12 @@ class App {
 
     public new() {}
 
-    public async func run(value: Int): Int {
+    public async run(value: Int): Int {
         return value + 1
     }
 }
 
-async func mainAsync(runner: Runner): Int {
+async mainAsync(runner: Runner): Int {
     return await runner.run(41)
 }
 """
@@ -958,10 +958,10 @@ async func mainAsync(runner: Runner): Int {
                 """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue {
+async fetch(): String, !NetworkIssue {
     return NetworkIssue.new()
 }
-async func load(): String {
+async load(): String {
     return catch await fetch() {
         issue: NetworkIssue => "fallback"
     }
@@ -984,10 +984,10 @@ async func load(): String {
                 """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue {
+async fetch(): String, !NetworkIssue {
     return NetworkIssue.new()
 }
-func load(): String {
+load(): String {
     const pending = fetch()
     return catch pending.await() {
         issue: NetworkIssue => "fallback"
@@ -1009,10 +1009,10 @@ func load(): String {
                 """
 @multidef
 class NetworkIssue {}
-async func download(url: String): String, !NetworkIssue {
+async download(url: String): String, !NetworkIssue {
     return url
 }
-async func load(): String[] {
+async load(): String[] {
     const urls = ["a", "b"]
     return catch await (download task[urls]).all() {
         issue: NetworkIssue => ["fallback"]
@@ -1032,12 +1032,12 @@ async func load(): String[] {
         source = emit_c(
             parse(
                 """
-func read(path: String): String => "sync"
-async func read(path: String): String => "async"
-func syncLoad(): String {
+read(path: String): String => "sync"
+async read(path: String): String => "async"
+syncLoad(): String {
     return read("file.txt")
 }
-func asyncLoad(): String {
+asyncLoad(): String {
     return read("file.txt").await()
 }
 """
@@ -1058,8 +1058,8 @@ func asyncLoad(): String {
         source = emit_c(
             parse(
                 """
-async func twice(value: Int): Int => value * 2
-func load(): Int[] {
+async twice(value: Int): Int => value * 2
+load(): Int[] {
     const values = [1, 2]
     return (twice task[values]).all().await()
 }
@@ -1083,8 +1083,8 @@ func load(): Int[] {
         source = emit_c(
             parse(
                 """
-async native func absValue(value: Int): Int = "abs"
-func load(): Int[] {
+async native absValue(value: Int): Int = "abs"
+load(): Int[] {
     const values = [-1, -2]
     const pending = absValue task[values]
     return pending.all().await()
@@ -1114,10 +1114,10 @@ func load(): Int[] {
 class Doubler {
     public new() {}
 
-    public async func twice(value: Int): Int => value * 2
+    public async twice(value: Int): Int => value * 2
 }
 
-func load(): Int[] {
+load(): Int[] {
     const values = [1, 2]
     const doubler = Doubler.new()
     return (doubler.twice task[values]).all().await()
@@ -1135,16 +1135,16 @@ func load(): Int[] {
         source = emit_c(
             parse(
                 """
-async func twice(value: Int): Int => value * 2
-func pickFirst(): Int {
+async twice(value: Int): Int => value * 2
+pickFirst(): Int {
     const values = [1, 2]
     return (twice task[values]).first().await()
 }
-func pickAny(): Int {
+pickAny(): Int {
     const values = [1, 2]
     return (twice task[values]).any().await()
 }
-func pickLast(): Int {
+pickLast(): Int {
     const values = [1, 2]
     return (twice task[values]).last().await()
 }
@@ -1213,7 +1213,7 @@ const defs: Defs = {
                 """
 class Counter {
     public value: Int
-    func inc(): Void {
+    inc(): Void {
         this.value = this.value + 1
     }
 }
@@ -1297,7 +1297,7 @@ class Server {
         source = emit_c(
             parse(
                 """
-func main(): Void {
+main(): Void {
     const values = ["one", "two"]
     print values[0]
 }
@@ -1318,12 +1318,12 @@ func main(): Void {
                 """
 class Counter {
     public value: Int
-    func inc(): Void {
+    inc(): Void {
         this.value = this.value + 1
     }
 }
 
-func tick(counter: Counter): Void {
+tick(counter: Counter): Void {
     counter.inc()
 }
 """
@@ -1340,10 +1340,10 @@ func tick(counter: Counter): Void {
             parse(
                 """
 class Profile {}
-func consume(take profile: Profile): Void {}
+consume(take profile: Profile): Void {}
 
-func main(): Void {
-    let profile: Profile = Profile.new()
+main(): Void {
+    var profile: Profile = Profile.new()
     consume(move profile)
 }
 """
@@ -1358,7 +1358,7 @@ func main(): Void {
         source = emit_c(
             parse(
                 """
-func name(flag: Bool): String {
+name(flag: Bool): String {
     return flag ? "Hello, " + "World" : ""
 }
 """
@@ -1376,11 +1376,11 @@ func name(flag: Bool): String {
         source = emit_c(
             parse(
                 """
-func empty(): String {
+empty(): String {
     return ""
 }
 
-func echo(name: String): String {
+echo(name: String): String {
     return name
 }
 """
@@ -1398,7 +1398,7 @@ func echo(name: String): String {
         source = emit_c(
             parse(
                 """
-func name(flag: Bool): String {
+name(flag: Bool): String {
     const result: String = flag ? "Hello, " + "World" : ""
     return result
 }
@@ -1419,12 +1419,12 @@ func name(flag: Bool): String {
             parse(
                 """
 class Helper {
-    public static func hello(name: String): String {
+    public static hello(name: String): String {
         return "Hello, " + name
     }
 }
 
-func main(): Void {
+main(): Void {
     print Helper.hello("World")
 }
 """
@@ -1446,7 +1446,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String {
+    public name(): String {
         return this.profile ? this.profile.firstName + "!" : ""
     }
 }
@@ -1468,7 +1468,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String? {
+    public name(): String? {
         return this.profile?.firstName
     }
 }
@@ -1491,7 +1491,7 @@ struct Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String {
+    public name(): String {
         return this.profile ? this.profile.firstName : ""
     }
 }
@@ -1513,10 +1513,10 @@ struct Profile {
 }
 class User {
     public profile: Profile?
-    public func render(profile: Profile): String {
+    public render(profile: Profile): String {
         return profile.firstName
     }
-    public func name(): String {
+    public name(): String {
         return this.profile ? this.render(this.profile) : ""
     }
 }
@@ -1534,7 +1534,7 @@ class User {
 class Profile {}
 class User {
     public profile: Profile?
-    public func setProfile(take profile: Profile): Void {
+    public setProfile(take profile: Profile): Void {
         this.profile = profile
     }
 }
@@ -1552,7 +1552,7 @@ class User {
             parse(
                 """
 class Profile {}
-func consume(take profile: Profile): Void {
+consume(take profile: Profile): Void {
 }
 """
             )
@@ -1568,7 +1568,7 @@ func consume(take profile: Profile): Void {
 class Profile {}
 class User {
     public profile: Profile?
-    public func setProfile(take profile: Profile): Void {
+    public setProfile(take profile: Profile): Void {
         this.profile = profile
     }
 }
@@ -1584,7 +1584,7 @@ class User {
             parse(
                 """
 class Profile {}
-func identity(take profile: Profile): Profile {
+identity(take profile: Profile): Profile {
     return profile
 }
 """
@@ -1602,7 +1602,7 @@ func identity(take profile: Profile): Profile {
 class Profile {}
 class User {
     public profile: Profile?
-    public func clear(): Void {
+    public clear(): Void {
         this.profile = null
     }
 }
@@ -1625,9 +1625,9 @@ class User {
     public profile: Profile?
 }
 
-func main(): Void {
-    let user: User = User.new()
-    let profile: Profile = Profile.new()
+main(): Void {
+    var user: User = User.new()
+    var profile: Profile = Profile.new()
     user.profile = move profile
 }
 """
@@ -1645,9 +1645,9 @@ func main(): Void {
             parse(
                 """
 class Profile {}
-func main(): Void {
-    let first: Profile = Profile.new()
-    let second: Profile = Profile.new()
+main(): Void {
+    var first: Profile = Profile.new()
+    var second: Profile = Profile.new()
     first = move second
 }
 """
@@ -1665,8 +1665,8 @@ func main(): Void {
             parse(
                 """
 class Profile {}
-func main(): Void {
-    let profile: Profile? = Profile.new()
+main(): Void {
+    var profile: Profile? = Profile.new()
     profile = null
 }
 """
@@ -1684,11 +1684,11 @@ func main(): Void {
                 """
 class User {
     public age: Int
-    func save(): Void {}
+    save(): Void {}
 }
 
-func main(): Void {
-    let user: User = User.new()
+main(): Void {
+    var user: User = User.new()
     user.{
         age = 42
         save()
@@ -1708,10 +1708,10 @@ struct Result {
     public statusCode: Int
 }
 
-func accept(result: Result): Result => result
+accept(result: Result): Result => result
 
-func main(): Void {
-    let result: Result = {
+main(): Void {
+    var result: Result = {
         statusCode: 0
     }
     accept(result.{
@@ -1729,8 +1729,8 @@ func main(): Void {
             parse(
                 """
 class Profile {}
-func makeProfile(): Profile {
-    let profile: Profile = Profile.new()
+makeProfile(): Profile {
+    var profile: Profile = Profile.new()
     return move profile
 }
 """
@@ -1745,7 +1745,7 @@ func makeProfile(): Profile {
             parse(
                 """
 class Math {
-    static func one(): Int => 1
+    static one(): Int => 1
 }
 
 const value: Int = Math.one()
@@ -1765,7 +1765,7 @@ const value: Int = Math.one()
 class Point {
     public new(public x: Int, public y: Int) {}
 
-    public static func origin(): self {
+    public static origin(): self {
         return self.new(0, 0)
     }
 }
@@ -1813,7 +1813,7 @@ class Counter {
             parse(
                 """
 class User {}
-let user: User
+var user: User
 """
             )
         )
@@ -1948,7 +1948,7 @@ const user: User = User.new()
             parse(
                 """
 class User {}
-func main(): Void {
+main(): Void {
     const user: User = User.new()
     print "done"
 }
@@ -1963,7 +1963,7 @@ func main(): Void {
             parse(
                 """
 class User {}
-func main(): Int {
+main(): Int {
     const user: User = User.new()
     return 7
 }
@@ -1983,11 +1983,11 @@ func main(): Int {
 class Issue {}
 class User {}
 class Work {
-    public static func run(): Int, !Issue {
+    public static run(): Int, !Issue {
         return Issue.new()
     }
 }
-func main(): Int {
+main(): Int {
     const user: User = User.new()
     const value: Int = catch Work.run() {
         issue: Issue => {
@@ -2009,7 +2009,7 @@ func main(): Int {
             parse(
                 """
 class User {
-    public func free(): Void {}
+    public free(): Void {}
 }
 """
             )
@@ -2090,7 +2090,7 @@ struct User {
         self.assertIn("free(value->tags.data);", source)
 
     def test_frees_temporary_string_concat_after_statement(self) -> None:
-        source = emit_c(parse('func main(): Void { print "a" + "b" + "c" }'))
+        source = emit_c(parse('main(): Void { print "a" + "b" + "c" }'))
 
         self.assertIn('char* forge_tmp_string0 = _forge_string_concat(3, "a", "b", "c");', source)
         self.assertIn('printf("%s\\n", forge_tmp_string0);', source)
@@ -2100,7 +2100,7 @@ struct User {
         source = emit_c(
             parse(
                 """
-func main(): Void {
+main(): Void {
     const text: String = "a" + "b"
     print text
 }
@@ -2121,12 +2121,12 @@ struct Response {
 }
 
 class Helper {
-    public static func render(): String {
+    public static render(): String {
         return "ok" + ""
     }
 }
 
-func make(): Response {
+make(): Response {
     const response: Response = {
         body: Helper.render()
     }
@@ -2147,7 +2147,7 @@ func make(): Response {
         source = emit_c(
             parse(
                 """
-func main(value: Int, enabled: Bool): Void {
+main(value: Int, enabled: Bool): Void {
     print value.toString()
     print enabled.toString()
 }
@@ -2167,7 +2167,7 @@ func main(value: Int, enabled: Bool): Void {
             parse(
                 """
 class User {}
-func make(): User {
+make(): User {
     const user: User = User.new()
     return move user
 }
@@ -2188,10 +2188,10 @@ func make(): User {
             parse(
                 """
 class Native {
-    public static native func answer(): Int = "native_answer"
+    public static native answer(): Int = "native_answer"
 }
 
-func main(): Int {
+main(): Int {
     return Native.answer()
 }
 """
@@ -2206,14 +2206,14 @@ func main(): Int {
             parse(
                 """
 class Native {
-    public static async native func answer(value: Int): Int = "native_answer"
+    public static async native answer(value: Int): Int = "native_answer"
 }
 
-async func mainAsync(): Int {
+async mainAsync(): Int {
     return await Native.answer(41)
 }
 
-func main(): Int {
+main(): Int {
     return mainAsync().await()
 }
 """
@@ -2230,16 +2230,16 @@ func main(): Int {
             parse(
                 """
 class Native {
-    public static async native func answer(value: Int): Int = "native_answer"
+    public static async native answer(value: Int): Int = "native_answer"
 }
 
-async func mainAsync(): Int {
+async mainAsync(): Int {
     const values = [1, 2]
     const results = await (Native.answer task[values]).all()
     return results[0] + results[1]
 }
 
-func main(): Int {
+main(): Int {
     return mainAsync().await()
 }
 """
@@ -2257,7 +2257,7 @@ func main(): Int {
                 """
 class
 
-public static func hello(name: String): String {
+public static hello(name: String): String {
     return "Hello, " + name
 }
 """
@@ -2266,7 +2266,7 @@ public static func hello(name: String): String {
                 """
 use Helper.StringHelper
 
-func main(): Void {
+main(): Void {
     print StringHelper.hello("World")
 }
 """
@@ -2390,7 +2390,7 @@ func main(): Void {
             (root / "legacy").mkdir()
             (root / "app" / "User.forge").write_text("class {}")
             (root / "legacy" / "User.forge").write_text("class {}")
-            (root / "main.forge").write_text("func main(): Void {}")
+            (root / "main.forge").write_text("main(): Void {}")
 
             result = emit_c_project(root / "main.forge", root / "c")
             header = result.header.read_text()
@@ -2419,7 +2419,7 @@ use Profile
 class
 
 public profile: Profile?
-public func setProfile(take profile: Profile): Void {
+public setProfile(take profile: Profile): Void {
     this.profile = profile
 }
 """
@@ -2429,9 +2429,9 @@ public func setProfile(take profile: Profile): Void {
 use Profile
 use User
 
-func main(): Void {
-    let profile: Profile = Profile.new()
-    let user: User = User.new()
+main(): Void {
+    var profile: Profile = Profile.new()
+    var user: User = User.new()
     user.setProfile(move profile)
 }
 """
@@ -2460,7 +2460,7 @@ nativepkg = "1.0.0"
                 """
 use nativepkg.Math
 
-func main(): Int {
+main(): Int {
     return Math.answer()
 }
 """
@@ -2484,7 +2484,7 @@ libraries = ["native_math"]
                 """
 class
 
-public static native func answer(): Int = "native_answer"
+public static native answer(): Int = "native_answer"
 """
             )
 
@@ -2520,7 +2520,7 @@ std = "0.1.0"
                 """
 use std.Http.Http
 
-func main(): Bool {
+main(): Bool {
     return true
 }
 """
@@ -2558,14 +2558,14 @@ func main(): Bool {
 @multidef
 class DivisionByZero {}
 class Calculator {
-    public static func divide(a: Int, b: Int): Int, !DivisionByZero {
+    public static divide(a: Int, b: Int): Int, !DivisionByZero {
         if b == 0 {
             return DivisionByZero.new()
         }
         return a / b
     }
 }
-func main(): Void {
+main(): Void {
     const result: Int = catch Calculator.divide(10, 0) {
         issue: DivisionByZero => 42
     }
@@ -2595,7 +2595,7 @@ class Issue {}
 class Response {
     public new(public status: Int) {}
 }
-func status(): Int, !Issue {
+status(): Int, !Issue {
     const response = Response.new(204)
     return response.status
 }
@@ -2612,8 +2612,8 @@ func status(): Int, !Issue {
         source = emit_c(
             parse(
                 """
-func append(): Void {
-    let raw = ""
+append(): Void {
+    var raw = ""
     raw = raw + "x"
     raw = raw + "y"
     print raw
@@ -2647,11 +2647,11 @@ func append(): Void {
 @multidef
 class ParseIssue {}
 class Parser {
-    public static func parse(): Int, !ParseIssue {
+    public static parse(): Int, !ParseIssue {
         return 1
     }
 }
-func parseAgain(): Int, !ParseIssue {
+parseAgain(): Int, !ParseIssue {
     return forward Parser.parse()
 }
 """
@@ -2675,9 +2675,9 @@ func parseAgain(): Int, !ParseIssue {
 @multidef
 class AllocFailed {}
 class Array {
-    public static func reserve(size: Int): Void, ?AllocFailed {}
+    public static reserve(size: Int): Void, ?AllocFailed {}
 }
-func main(): Void {
+main(): Void {
     Array.reserve(1000)
 }
 """
@@ -2697,11 +2697,11 @@ func main(): Void {
 class ParseIssue {}
 class IoIssue {}
 class Parser {
-    public static func parse(): Int, !ParseIssue {
+    public static parse(): Int, !ParseIssue {
         return 1
     }
 }
-func parseAgain(): Int, !ParseIssue, !IoIssue {
+parseAgain(): Int, !ParseIssue, !IoIssue {
     return forward Parser.parse()
 }
 """
@@ -2724,11 +2724,11 @@ func parseAgain(): Int, !ParseIssue, !IoIssue {
 class ParseIssue {}
 class IoIssue {}
 class Parser {
-    public static func parse(): Int, !ParseIssue, !IoIssue {
+    public static parse(): Int, !ParseIssue, !IoIssue {
         return IoIssue.new()
     }
 }
-func parseAgain(): Int, !IoIssue {
+parseAgain(): Int, !IoIssue {
     return forward catch Parser.parse() {
         issue: ParseIssue => 10
     }
@@ -2756,11 +2756,11 @@ func parseAgain(): Int, !IoIssue {
 class Issue {}
 class Resource {}
 class Parser {
-    public static func fail(): Int, !Issue {
+    public static fail(): Int, !Issue {
         return Issue.new()
     }
 }
-func load(): Int, !Issue {
+load(): Int, !Issue {
     const resource = Resource.new()
     return forward Parser.fail()
 }
@@ -2779,7 +2779,7 @@ func load(): Int, !Issue {
 @multidef
 class Issue {}
 class Parser {
-    public static func parse(): String, !Issue {
+    public static parse(): String, !Issue {
         return Issue.new()
     }
 }
@@ -2787,8 +2787,8 @@ struct Banner {
     public title: String
     public text: String
 }
-func load(): Banner, !Issue {
-    let result: Banner = {}
+load(): Banner, !Issue {
+    var result: Banner = {}
     result.title = forward Parser.parse()
     result.text = forward Parser.parse()
     return result
@@ -2812,7 +2812,7 @@ use Issue
 
 class
 
-public static func parse(): Int, !Issue {
+public static parse(): Int, !Issue {
     return 1
 }
 """
@@ -2822,7 +2822,7 @@ public static func parse(): Int, !Issue {
 use Issue
 use Parser
 
-func main(): Int {
+main(): Int {
     return catch Parser.parse() {
         issue: Issue => 2
     }
@@ -2847,7 +2847,7 @@ func main(): Int {
         source = emit_c(
             parse(
                 """
-func main(): Int {
+main(): Int {
     const fromFor = for [1, 2] as item {
         if item == 2 {
             break item
@@ -2875,7 +2875,7 @@ func main(): Int {
         source = emit_c(
             parse(
                 """
-func value(): String {
+value(): String {
     return while true {
         break "selected"
     } else ("a" + "b")
@@ -2895,7 +2895,7 @@ func value(): String {
                 """
 class File {}
 
-func pick(take file: File): File? {
+pick(take file: File): File? {
     return while true {
         break file
     }
@@ -2915,7 +2915,7 @@ func pick(take file: File): File? {
                 """
 class File {}
 
-func pick(flag: Bool, take first: File, take second: File): File? {
+pick(flag: Bool, take first: File, take second: File): File? {
     return while flag {
         switch flag {
             true => {
@@ -2944,7 +2944,7 @@ func pick(flag: Bool, take first: File, take second: File): File? {
                 """
 class File {}
 
-func pick(flag: Bool, take first: File, take second: File): File? {
+pick(flag: Bool, take first: File, take second: File): File? {
     return while false {
         break null
     } else (flag ? first : second)
@@ -2964,8 +2964,8 @@ func pick(flag: Bool, take first: File, take second: File): File? {
         source = emit_c(
             parse(
                 """
-func value(): Int {
-    let index = 0
+value(): Int {
+    var index = 0
     return while (while false { break false } else index < 2) {
         index++
     } else index
@@ -2985,7 +2985,7 @@ func value(): Int {
         source = emit_c(
             parse(
                 """
-func value(): Void {
+value(): Void {
     const result: String? = while true {
         break "selected"
     }
@@ -3003,7 +3003,7 @@ func value(): Void {
         source = emit_c(
             parse(
                 """
-func value(): String {
+value(): String {
     return while false {
         break "selected"
     } else ("n=" + 42)
@@ -3025,11 +3025,11 @@ func value(): String {
         source = emit_c(
             parse(
                 """
-func parts(): String[] {
+parts(): String[] {
     return "a,b".split(",", 2)
 }
 
-func exercise(): Void {
+exercise(): Void {
     const local = "a,b".split(",", 2)
     print "a,b".split(",", 2).len
     "abc".toBytes()
@@ -3058,9 +3058,9 @@ func exercise(): Void {
         source = emit_c(
             parse(
                 """
-func exercise(flag: Bool): Void {
+exercise(flag: Bool): Void {
     const decoded: String = flag ? String.fromBytes("abc".toBytes()) : ""
-    let decodedAgain = "old"
+    var decodedAgain = "old"
     decodedAgain = flag ? String.fromBytes("next".toBytes()) : "fallback"
     const first = "a,b".split(",", 2)[0]
     const selected = flag ? "a,b".split(",", 2) : "c,d".split(",", 2)
@@ -3068,7 +3068,7 @@ func exercise(flag: Bool): Void {
     print (flag ? "one,two".split(",", 2) : "three".split(",", 2)).len
     const fallback = ["fallback"]
     const mixed = flag ? "owned,x".split(",", 2) : fallback
-    let reassigned = "old".split(",", 2)
+    var reassigned = "old".split(",", 2)
     reassigned = "new,value".split(",", 2)
     print decoded
     print first
@@ -3078,15 +3078,15 @@ func exercise(flag: Bool): Void {
     print reassigned[0]
 }
 
-func chooseMixed(flag: Bool, fallback: String[]): String[] {
+chooseMixed(flag: Bool, fallback: String[]): String[] {
     return flag ? "return-owned,x".split(",", 2) : fallback
 }
 
-func chooseBorrowed(flag: Bool, left: String[], right: String[]): String[] {
+chooseBorrowed(flag: Bool, left: String[], right: String[]): String[] {
     return flag ? left : right
 }
 
-func chooseBytes(flag: Bool, fallback: Byte[]): Byte[] {
+chooseBytes(flag: Bool, fallback: Byte[]): Byte[] {
     return flag ? "bytes".toBytes() : fallback
 }
 """

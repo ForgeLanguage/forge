@@ -5,7 +5,7 @@
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     print "Hello, World!"
 }

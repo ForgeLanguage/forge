@@ -28,8 +28,8 @@ Owning-хэндл нельзя копировать. Его можно толь�
 ## Borrow по умолчанию
 
 ```forge
-let a: File = ...
-let b: File = a
+var a: File = ...
+var b: File = a
 ```
 
 Это **borrow**, а не копия.
@@ -48,7 +48,7 @@ let b: File = a
 ## Перемещение владения (`take` + `move`)
 
 ```forge
-let a: File = ...
+var a: File = ...
 consume(move a)
 ```
 
@@ -72,12 +72,12 @@ a.dispose()   // ❌ moved
 Передача владения через границу вызова должна быть явной с двух сторон:
 
 ```forge
-public func consume(take file: File): Void {
+public consume(take file: File): Void {
     file.dispose()
 }
 
-public func main(): Void {
-    let file: File = File.open("test.csv")
+public main(): Void {
+    var file: File = File.open("test.csv")
     consume(move file)
 }
 ```
@@ -97,7 +97,7 @@ inspect(move file)  // ❌ inspect не принимает владение
 Внутри функции `take`-параметр уже является owned value, поэтому его можно передать дальше без повторного `move`:
 
 ```forge
-public func setProfile(take profile: Profile): Void {
+public setProfile(take profile: Profile): Void {
     this.profile = profile
 }
 ```
@@ -107,7 +107,7 @@ public func setProfile(take profile: Profile): Void {
 Обычная локальная owner-переменная требует явного `move` при передаче в owned field:
 
 ```forge
-let profile: Profile = Profile.new()
+var profile: Profile = Profile.new()
 this.profile = profile       // ❌ нужен move
 this.profile = move profile  // ✅
 ```
@@ -115,8 +115,8 @@ this.profile = move profile  // ✅
 То же правило действует при перезаписи owned local:
 
 ```forge
-let first: Profile = Profile.new()
-let second: Profile = Profile.new()
+var first: Profile = Profile.new()
+var second: Profile = Profile.new()
 
 first = second       // ❌ нужен move
 first = move second  // ✅ old first очищается, second становится moved
@@ -125,7 +125,7 @@ first = move second  // ✅ old first очищается, second станови�
 Для nullable owned local присваивание `null` очищает старое значение и записывает `null`:
 
 ```forge
-let profile: Profile? = Profile.new()
+var profile: Profile? = Profile.new()
 profile = null
 ```
 
@@ -176,7 +176,7 @@ csv.read()                  // ❌ ошибка
 # 15.3 exclusive
 
 ```forge
-exclusive func fn(...)
+exclusive fn(...)
 ```
 
 Метод:
@@ -192,7 +192,7 @@ exclusive func fn(...)
 # 15.4 terminate
 
 ```forge
-exclusive terminate func dispose(): Void
+exclusive terminate dispose(): Void
 ```
 
 Правила:
@@ -232,7 +232,7 @@ exclusive terminate func dispose(): Void
 Функция может вернуть владение вызывающему:
 
 ```forge
-private func process(take file: File): File
+private process(take file: File): File
 {
     return file
 }
@@ -246,8 +246,8 @@ private func process(take file: File): File
 Обычная локальная owner-переменная возвращается через `move`:
 
 ```forge
-private func makeFile(): File {
-    let file: File = File.open("test.csv")
+private makeFile(): File {
+    var file: File = File.open("test.csv")
     return move file
 }
 ```
@@ -257,7 +257,7 @@ private func makeFile(): File {
 Возврат borrowed resource как owned результата запрещён:
 
 ```forge
-private func identity(file: File): File {
+private identity(file: File): File {
     return file // ❌ file — borrow
 }
 ```
@@ -269,11 +269,11 @@ private func identity(file: File): File {
 ```forge
 class File
 {
-    exclusive terminate func dispose(): Void {
+    exclusive terminate dispose(): Void {
         ...
     }
 
-    public static func open(path: String): File!, IoIssue! {
+    public static open(path: String): File!, IoIssue! {
         ...
     }
 }
@@ -282,7 +282,7 @@ class File
 Использование:
 
 ```forge
-public func main(): Void
+public main(): Void
 {
     const file: File = catch File.open("test.csv") {
         io: IoIssue => return
@@ -307,7 +307,7 @@ public func main(): Void
 ```forge
 class Iterators
 {
-    public static func create(take list: List<String>): Iterator<List<String>>
+    public static create(take list: List<String>): Iterator<List<String>>
 }
 ```
 
@@ -326,7 +326,7 @@ const iterator = Iterators.create(move list)
 ```forge
 class Iterator<T>
 {
-    exclusive terminate func getOriginal(): T
+    exclusive terminate getOriginal(): T
 }
 ```
 
@@ -341,14 +341,14 @@ class Iterator<T>
 ## Пример
 
 ```forge
-let list: List<String> = ...
+var list: List<String> = ...
 
-let it: Iterator<List<String>> = Iterators.create(move list)
+var it: Iterator<List<String>> = Iterators.create(move list)
 // list moved
 
 // работа через it
 
-let list2: List<String> = it.getOriginal()
+var list2: List<String> = it.getOriginal()
 // it terminated
 ```
 

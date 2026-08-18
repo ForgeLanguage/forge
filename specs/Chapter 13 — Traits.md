@@ -18,7 +18,7 @@
 trait Greeter {
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         print "Hello, " + this.name + "!"
     }
 }
@@ -68,7 +68,7 @@ print this.name
 trait Greeter {
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         print "Hello, " + this.name + "!"
     }
 }
@@ -91,13 +91,13 @@ public new(name: String) {
 trait Greeter {
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         print "Hello, " + this.name + "!"
     }
 }
 
 trait Logger {
-    public func log(message: String): Void {
+    public log(message: String): Void {
         print "[LOG] " + message
     }
 }
@@ -110,7 +110,7 @@ public new(name: String) {
     this.Greeter.name = name
 }
 
-public func run(): Void {
+public run(): Void {
     this.Logger.log("starting")
     this.Greeter.greet()
 }
@@ -124,7 +124,7 @@ public func run(): Void {
 trait Greeter {
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         print "Hello, " + this.name + "!"
     }
 }
@@ -132,7 +132,7 @@ trait Greeter {
 trait ArgumentPrinter {
     public args: String[]
 
-    public func printArgs(): Void {
+    public printArgs(): Void {
         for this.args as i, name {
             print i + ": " + name
         }
@@ -143,7 +143,7 @@ class
 uses Greeter
 uses ArgumentPrinter
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: App = App.new(args)
     app.run()
 }
@@ -153,7 +153,7 @@ public new(args: String[]) {
     this.Greeter.name = "Forge"
 }
 
-public func run(): Void {
+public run(): Void {
     this.Greeter.greet()
     this.ArgumentPrinter.printArgs()
 }
@@ -182,7 +182,7 @@ public func run(): Void {
 trait Greeter {
     public name: String
 
-    public func greet(): Void {
+    public greet(): Void {
         print "Hello, " + this.name + "!"
     }
 }
@@ -194,7 +194,7 @@ public new(name: String) {
     this.Greeter.name = name
 }
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: App = App.new("Forge")
 
     const g: Greeter = app

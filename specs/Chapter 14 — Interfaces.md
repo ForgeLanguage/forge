@@ -23,7 +23,7 @@ Interface — это trait без состояния.
 
 ```forge
 interface Printable {
-    public func print(): Void
+    public print(): Void
 }
 ```
 
@@ -39,7 +39,7 @@ trait UserPrintable {
 
     public name: String
 
-    public func print(): Void {
+    public print(): Void {
         print "User: " + this.name
     }
 }
@@ -64,7 +64,7 @@ implements Printable
 Interface можно использовать как тип.
 
 ```forge
-public static func output(item: Printable): Void {
+public static output(item: Printable): Void {
     item.print()
 }
 ```
@@ -103,13 +103,13 @@ p.print()
 
 ```forge
 interface Runnable {
-    public func run(): Void
+    public run(): Void
 }
 
 trait AppLogic {
     implements Runnable
 
-    public func run(): Void {
+    public run(): Void {
         print "Running app"
     }
 }
@@ -118,7 +118,7 @@ class
 uses AppLogic
 implements Runnable
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: Runnable = App.new()
     app.run()
 }
@@ -130,7 +130,7 @@ public static func main(args: String[]): Void {
 
 ```forge
 interface Stringable {
-    public func toString(): String
+    public toString(): String
 }
 ```
 
@@ -140,7 +140,7 @@ interface Stringable {
 class User
 implements Stringable
 
-public func toString(): String {
+public toString(): String {
     return "User"
 }
 ```
@@ -154,7 +154,7 @@ public func toString(): String {
 
 ```forge
 interface Printable {
-    public func print(): Void
+    public print(): Void
 }
 ```
 
@@ -166,7 +166,7 @@ trait UserPrintable {
 
     public name: String
 
-    public func print(): Void {
+    public print(): Void {
         print "User: " + this.name
     }
 }
@@ -176,7 +176,7 @@ trait DebugPrintable {
 
     public id: Int
 
-    public func print(): Void {
+    public print(): Void {
         print "Debug id: " + this.id
     }
 }
@@ -229,7 +229,7 @@ uses UserPrintable
 uses DebugPrintable
 implements Printable
 
-public func print(): Void from UserPrintable
+public print(): Void from UserPrintable
 ```
 
 Теперь:
@@ -248,7 +248,7 @@ p.print()
 Класс может реализовать собственную логику:
 
 ```forge
-public func print(): Void {
+public print(): Void {
     this.UserPrintable.print()
     this.DebugPrintable.print()
 }

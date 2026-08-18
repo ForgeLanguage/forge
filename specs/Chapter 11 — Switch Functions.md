@@ -13,7 +13,7 @@
 Обычная функция:
 
 ```forge
-public static func classify(n: Int): String {
+public static classify(n: Int): String {
     if n > 0 {
         return "positive"
     } elseif n < 0 {
@@ -73,7 +73,7 @@ switch name(params): returnType {
 ```forge
 class
 
-public static func main(args: String[]): Void {
+public static main(args: String[]): Void {
     const app: App = App.new(args)
     app.run()
 }
@@ -84,7 +84,7 @@ public new(args: String[]) {
     this.args = args
 }
 
-public func run(): Void {
+public run(): Void {
     for this.args as name {
         print name + " -> " + self.classify(name.length)
     }

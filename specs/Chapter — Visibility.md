@@ -62,7 +62,7 @@ internal class Parser {
 
 ```forge
 public class Client {
-    public func request(): Response {
+    public request(): Response {
         ...
     }
 }
@@ -82,7 +82,7 @@ use http.Client
 
 ```forge
 internal class Parser {
-    public func parse(): Void {
+    public parse(): Void {
         ...
     }
 }
@@ -102,7 +102,7 @@ internal class Parser {
 public class Client {
     private cache: Cache
 
-    private func resetCache(): Void {
+    private resetCache(): Void {
         ...
     }
 }
@@ -127,7 +127,7 @@ effective_visibility(member) =
 
 ```forge
 internal class Parser {
-    public func parse(): Void {
+    public parse(): Void {
         ...
     }
 }
@@ -141,7 +141,7 @@ internal class Parser {
 
 ```forge
 public class Client {
-    internal func debug(): Void {
+    internal debug(): Void {
         ...
     }
 }
@@ -164,7 +164,7 @@ internal class Parser {
 }
 
 public class Client {
-    public func parser(): Parser {
+    public parser(): Parser {
         ...
     }
 }
@@ -181,7 +181,7 @@ internal class Parser {
 }
 
 public class Client {
-    internal func parser(): Parser {
+    internal parser(): Parser {
         ...
     }
 }

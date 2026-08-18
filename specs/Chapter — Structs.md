@@ -29,7 +29,7 @@ Struct fields use the same visibility modifiers as other type members.
 A struct value can be initialized with a field literal:
 
 ```forge
-let response: HttpResponse = {
+var response: HttpResponse = {
     status: 200,
     body: "OK"
 }
@@ -50,7 +50,7 @@ public struct
 public status: Int
 public body: String
 
-public func isClientError(): Bool => this.status >= 400 && this.status < 500
+public isClientError(): Bool => this.status >= 400 && this.status < 500
 ```
 
 Inside an instance method, `this` refers to the current struct value.

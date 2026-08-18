@@ -12,7 +12,7 @@ class LexerTests(unittest.TestCase):
         source = '''
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     print "Hello, World!"
 }
@@ -24,7 +24,6 @@ public static func main(args: String[]): Void
                 TokenKind.CLASS,
                 TokenKind.PUBLIC,
                 TokenKind.STATIC,
-                TokenKind.FUNC,
                 TokenKind.IDENTIFIER,
                 TokenKind.LEFT_PAREN,
                 TokenKind.IDENTIFIER,
@@ -64,10 +63,9 @@ public static func main(args: String[]): Void
 
     def test_template_is_keyword(self) -> None:
         self.assertEqual(
-            kinds("template func parse"),
+            kinds("template parse"),
             [
                 TokenKind.TEMPLATE,
-                TokenKind.FUNC,
                 TokenKind.IDENTIFIER,
                 TokenKind.EOF,
             ],
@@ -376,7 +374,7 @@ do {
 
     def test_threads_lock_and_ownership_keywords(self) -> None:
         source = """
-private func process(take file: File): Void, File! {
+private process(take file: File): Void, File! {
     forward file
 }
 
@@ -386,7 +384,7 @@ lock user {
     user.cache.set("x", "y")
 }
 
-exclusive terminate func dispose(): Void {
+exclusive terminate dispose(): Void {
     return
 }
 """
@@ -414,7 +412,7 @@ public static switch classify(len: Int): String {
     default => "long"
 }
 
-public static func parseInt(text: String): Int, ParseIssue! {
+public static parseInt(text: String): Int, ParseIssue! {
     yield 1
     return 2
 }

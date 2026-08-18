@@ -65,7 +65,7 @@ const pair: Pair<String, Int> = Pair<String, Int> {
 Дженерики можно использовать и в функциях.
 
 ```forge
-public static func identity<T>(value: T): T {
+public static identity<T>(value: T): T {
     return value
 }
 ```
@@ -100,12 +100,12 @@ const value: Int = identity<Int>(10)
 
 ```forge
 interface Printable {
-    public func print(): Void
+    public print(): Void
 }
 ```
 
 ```forge
-public static func show<T: Printable>(value: T): Void {
+public static show<T: Printable>(value: T): Void {
     value.print()
 }
 ```
@@ -119,7 +119,7 @@ public static func show<T: Printable>(value: T): Void {
 Тип может удовлетворять нескольким контрактам одновременно.
 
 ```forge
-public static func save<T: Printable + Storable>(value: T): Void {
+public static save<T: Printable + Storable>(value: T): Void {
     value.print()
     value.save()
 }

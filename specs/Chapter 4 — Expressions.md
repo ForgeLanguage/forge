@@ -3,7 +3,7 @@
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     print "Hello, World!"
 }
@@ -18,7 +18,7 @@ public static func main(args: String[]): Void
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const name: String = "World"
     print "Hello, " + name + "!"
@@ -42,7 +42,7 @@ public static func main(args: String[]): Void
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const a: Int = 5
     const b: Int = 3
@@ -68,7 +68,7 @@ public static func main(args: String[]): Void
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const value: Int = 2 + 3 * 4
     print value
@@ -96,7 +96,7 @@ const value: Int = (2 + 3) * 4
 ```forge
 class
 
-public static func main(args: String[]): Void
+public static main(args: String[]): Void
 {
     const a: Int = 10
     const isBig: Bool = a > 5

@@ -3,58 +3,58 @@ use std.Json.JsonValue
 
 class
 
-public static native func parse(text: String): JsonValue, !JsonIssue = "forge_json_parse"
-public static native func get(value: JsonValue, name: String): JsonValue, !JsonIssue = "forge_json_get"
-public static native func at(value: JsonValue, index: Int): JsonValue, !JsonIssue = "forge_json_at"
-public static native func length(value: JsonValue): Int, !JsonIssue = "forge_json_length"
-public static native func asString(value: JsonValue): String, !JsonIssue = "forge_json_as_string"
-public static native func asInt(value: JsonValue): Int, !JsonIssue = "forge_json_as_int"
-public static native func asDouble(value: JsonValue): Double, !JsonIssue = "forge_json_as_double"
-public static native func asBool(value: JsonValue): Bool, !JsonIssue = "forge_json_as_bool"
-public static native func isNull(value: JsonValue): Bool, !JsonIssue = "forge_json_value_is_null"
-public static native func getString(value: JsonValue, name: String): String, !JsonIssue = "forge_json_get_string"
-public static native func getInt(value: JsonValue, name: String): Int, !JsonIssue = "forge_json_get_int"
-public static native func getDouble(value: JsonValue, name: String): Double, !JsonIssue = "forge_json_get_double"
-public static native func getBool(value: JsonValue, name: String): Bool, !JsonIssue = "forge_json_get_bool"
-public static native func getIntArray(value: JsonValue, name: String): Int[], !JsonIssue = "forge_json_get_int_array"
-public static native func values(value: JsonValue): JsonValue[], !JsonIssue = "forge_json_values"
-public static native func isFieldNull(value: JsonValue, name: String): Bool, !JsonIssue = "forge_json_is_null"
-public static native func writeString(value: String): String = "forge_json_write_string"
+public static native parse(text: String): JsonValue, !JsonIssue = "forge_json_parse"
+public static native get(value: JsonValue, name: String): JsonValue, !JsonIssue = "forge_json_get"
+public static native at(value: JsonValue, index: Int): JsonValue, !JsonIssue = "forge_json_at"
+public static native length(value: JsonValue): Int, !JsonIssue = "forge_json_length"
+public static native asString(value: JsonValue): String, !JsonIssue = "forge_json_as_string"
+public static native asInt(value: JsonValue): Int, !JsonIssue = "forge_json_as_int"
+public static native asDouble(value: JsonValue): Double, !JsonIssue = "forge_json_as_double"
+public static native asBool(value: JsonValue): Bool, !JsonIssue = "forge_json_as_bool"
+public static native isNull(value: JsonValue): Bool, !JsonIssue = "forge_json_value_is_null"
+public static native getString(value: JsonValue, name: String): String, !JsonIssue = "forge_json_get_string"
+public static native getInt(value: JsonValue, name: String): Int, !JsonIssue = "forge_json_get_int"
+public static native getDouble(value: JsonValue, name: String): Double, !JsonIssue = "forge_json_get_double"
+public static native getBool(value: JsonValue, name: String): Bool, !JsonIssue = "forge_json_get_bool"
+public static native getIntArray(value: JsonValue, name: String): Int[], !JsonIssue = "forge_json_get_int_array"
+public static native values(value: JsonValue): JsonValue[], !JsonIssue = "forge_json_values"
+public static native isFieldNull(value: JsonValue, name: String): Bool, !JsonIssue = "forge_json_is_null"
+public static native writeString(value: String): String = "forge_json_write_string"
 
-public static func readString(value: JsonValue): String, !JsonIssue {
+public static readString(value: JsonValue): String, !JsonIssue {
     return forward Json.asString(value)
 }
 
-public static func readInt(value: JsonValue): Int, !JsonIssue {
+public static readInt(value: JsonValue): Int, !JsonIssue {
     return forward Json.asInt(value)
 }
 
-public static func readDouble(value: JsonValue): Double, !JsonIssue {
+public static readDouble(value: JsonValue): Double, !JsonIssue {
     return forward Json.asDouble(value)
 }
 
-public static func readBool(value: JsonValue): Bool, !JsonIssue {
+public static readBool(value: JsonValue): Bool, !JsonIssue {
     return forward Json.asBool(value)
 }
 
-public static func writeInt(value: Int): String {
+public static writeInt(value: Int): String {
     return value.toString()
 }
 
-public static func writeDouble(value: Double): String {
+public static writeDouble(value: Double): String {
     return value.toString()
 }
 
-public static func writeBool(value: Bool): String {
+public static writeBool(value: Bool): String {
     if value {
         return "true"
     }
     return "false"
 }
 
-public static func writeStringArray(values: String[]): String {
-    let result: String = "["
-    let separator: String = ""
+public static writeStringArray(values: String[]): String {
+    var result: String = "["
+    var separator: String = ""
     for values as value {
         result = result + separator + Json.writeString(value)
         separator = ","
@@ -62,9 +62,9 @@ public static func writeStringArray(values: String[]): String {
     return result + "]"
 }
 
-public static func writeIntArray(values: Int[]): String {
-    let result: String = "["
-    let separator: String = ""
+public static writeIntArray(values: Int[]): String {
+    var result: String = "["
+    var separator: String = ""
     for values as value {
         result = result + separator + Json.writeInt(value)
         separator = ","
@@ -72,9 +72,9 @@ public static func writeIntArray(values: Int[]): String {
     return result + "]"
 }
 
-public static func writeDoubleArray(values: Double[]): String {
-    let result: String = "["
-    let separator: String = ""
+public static writeDoubleArray(values: Double[]): String {
+    var result: String = "["
+    var separator: String = ""
     for values as value {
         result = result + separator + Json.writeDouble(value)
         separator = ","
@@ -82,9 +82,9 @@ public static func writeDoubleArray(values: Double[]): String {
     return result + "]"
 }
 
-public static func writeBoolArray(values: Bool[]): String {
-    let result: String = "["
-    let separator: String = ""
+public static writeBoolArray(values: Bool[]): String {
+    var result: String = "["
+    var separator: String = ""
     for values as value {
         result = result + separator + Json.writeBool(value)
         separator = ","
@@ -92,13 +92,13 @@ public static func writeBoolArray(values: Bool[]): String {
     return result + "]"
 }
 
-public static template func parse<T:struct>(text: String): T, !JsonIssue {
+public static template parse<T:struct>(text: String): T, !JsonIssue {
     const value = forward Json.parse(text)
     return forward Json.read<T>(value)
 }
 
-public static template func stringify<T:struct>(value: T): String {
-    let result: String = "{"
+public static template stringify<T:struct>(value: T): String {
+    var result: String = "{"
     #for Reflection.type<T>().properties as property {
         #if property.type.isNullable {
             if value.#{property.name} {
@@ -137,9 +137,9 @@ public static template func stringify<T:struct>(value: T): String {
     return result + "}"
 }
 
-public static template func stringifyArray<T:struct>(values: T[]): String {
-    let result: String = "["
-    let separator: String = ""
+public static template stringifyArray<T:struct>(values: T[]): String {
+    var result: String = "["
+    var separator: String = ""
     for values as value {
         result = result + separator + Json.stringify<#{T}>(value)
         separator = ","
@@ -147,7 +147,7 @@ public static template func stringifyArray<T:struct>(values: T[]): String {
     return result + "]"
 }
 
-public static template func readArray<T:struct>(value: JsonValue): T[], !JsonIssue {
+public static template readArray<T:struct>(value: JsonValue): T[], !JsonIssue {
     const values = forward Json.values(value)
     const result = catch Json.read<T>[values] {
         issue: JsonIssue => {
@@ -157,8 +157,8 @@ public static template func readArray<T:struct>(value: JsonValue): T[], !JsonIss
     return result
 }
 
-public static template func read<T:struct>(value: JsonValue): T, !JsonIssue {
-    let result: T = {}
+public static template read<T:struct>(value: JsonValue): T, !JsonIssue {
+    var result: T = {}
     #for Reflection.type<T>().properties as property {
         #if property.type.isNullable {
             if forward Json.isFieldNull(value, "#{property.name}") {

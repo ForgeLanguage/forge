@@ -3,7 +3,7 @@ use BundleFirst.Defs
 use Logger
 use std.Di.DiContainer
 
-func main(): Void {
+main(): Void {
     const container = DiContainer.new()
     const defs: Defs = BundleFirst.defs()
 

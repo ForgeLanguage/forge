@@ -213,7 +213,7 @@ def ensure_c_main(c_files: list[Path]) -> None:
             return
     raise ForgeCliError(
         "project does not define an executable entry point. Add top-level "
-        "`func main(): Void` or `func main(): Int` to the project entry file."
+        "`main(): Void` or `main(): Int` to the project entry file."
     )
 
 

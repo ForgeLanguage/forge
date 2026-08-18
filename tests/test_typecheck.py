@@ -40,7 +40,7 @@ const copy = answer
     def test_checks_function_signature_return_and_call(self) -> None:
         program = parse(
             """
-func add(left: Int, right: Int): Int => left + right
+add(left: Int, right: Int): Int => left + right
 const result: Int = add(1, 2)
 """
         )
@@ -56,7 +56,7 @@ const result: Int = add(1, 2)
     def test_async_function_call_returns_task_of_declared_return_type(self) -> None:
         program = parse(
             """
-async func fetch(): String => "ok"
+async fetch(): String => "ok"
 const pending = fetch()
 """
         )
@@ -72,8 +72,8 @@ const pending = fetch()
     def test_sync_async_twins_plain_call_prefers_sync_function(self) -> None:
         program = parse(
             """
-func read(path: String): String => "sync"
-async func read(path: String): String => "async"
+read(path: String): String => "sync"
+async read(path: String): String => "async"
 const text: String = read("file.txt")
 """
         )
@@ -86,9 +86,9 @@ const text: String = read("file.txt")
     def test_sync_async_twins_await_prefers_async_function(self) -> None:
         program = parse(
             """
-func read(path: String): String => "sync"
-async func read(path: String): String => "async"
-async func load(): String {
+read(path: String): String => "sync"
+async read(path: String): String => "async"
+async load(): String {
     return await read("file.txt")
 }
 """
@@ -103,8 +103,8 @@ async func load(): String {
     def test_sync_async_twins_task_context_prefers_async_function(self) -> None:
         program = parse(
             """
-func read(path: String): String => "sync"
-async func read(path: String): String => "async"
+read(path: String): String => "sync"
+async read(path: String): String => "async"
 const pending: Task<String> = read("file.txt")
 """
         )
@@ -119,7 +119,7 @@ const pending: Task<String> = read("file.txt")
     def test_async_only_call_in_sync_value_context_uses_generated_wrapper(self) -> None:
         program = parse(
             """
-async func read(path: String): String => "async"
+async read(path: String): String => "async"
 const text: String = read("file.txt")
 """
         )
@@ -132,8 +132,8 @@ const text: String = read("file.txt")
     def test_async_only_call_in_sync_return_context_uses_generated_wrapper(self) -> None:
         program = parse(
             """
-async func read(path: String): String => "async"
-func load(): String {
+async read(path: String): String => "async"
+load(): String {
     return read("file.txt")
 }
 """
@@ -148,7 +148,7 @@ func load(): String {
     def test_accepts_explicit_task_type_annotation_for_async_call(self) -> None:
         program = parse(
             """
-async func fetch(): String => "ok"
+async fetch(): String => "ok"
 const pending: Task<String> = fetch()
 """
         )
@@ -184,7 +184,7 @@ const pending: Task<String> = fetch()
     def test_task_bulk_call_returns_task_collection(self) -> None:
         program = parse(
             """
-async func download(url: String): String => url
+async download(url: String): String => url
 const urls = ["a", "b"]
 const pending = download task[urls]
 """
@@ -201,8 +201,8 @@ const pending = download task[urls]
     def test_task_collection_all_returns_task_of_array(self) -> None:
         program = parse(
             """
-async func download(url: String): String => url
-async func load(): String[] {
+async download(url: String): String => url
+async load(): String[] {
     const urls = ["a", "b"]
     return await (download task[urls]).all()
 }
@@ -220,8 +220,8 @@ async func load(): String[] {
     def test_task_collection_concurrency_preserves_collection_for_any(self) -> None:
         program = parse(
             """
-async func download(url: String): String => url
-async func load(): String {
+async download(url: String): String => url
+async load(): String {
     const urls = ["a", "b"]
     return await (download task[urls]).concurrency(2).any()
 }
@@ -239,8 +239,8 @@ async func load(): String {
             """
 @multidef
 class NetworkIssue {}
-async func download(url: String): String, !NetworkIssue => url
-async func load(): String[] {
+async download(url: String): String, !NetworkIssue => url
+async load(): String[] {
     const urls = ["a", "b"]
     return catch await (download task[urls]).all() {
         issue: NetworkIssue => ["fallback"]
@@ -258,8 +258,8 @@ async func load(): String[] {
             """
 @multidef
 class NetworkIssue {}
-async func download(url: String): String, !NetworkIssue => url
-async func load(): String[], !NetworkIssue {
+async download(url: String): String, !NetworkIssue => url
+async load(): String[], !NetworkIssue {
     const urls = ["a", "b"]
     return forward await (download task[urls]).all()
 }
@@ -275,8 +275,8 @@ async func load(): String[], !NetworkIssue {
             """
 @multidef
 class NetworkIssue {}
-async func download(url: String): String, !NetworkIssue => url
-async func load(): String[] {
+async download(url: String): String, !NetworkIssue => url
+async load(): String[] {
     const urls = ["a", "b"]
     return await (download task[urls]).all()
 }
@@ -292,8 +292,8 @@ async func load(): String[] {
         result = check_types(
             parse(
                 """
-async func download(url: String): String => url
-async func load(): String {
+async download(url: String): String => url
+async load(): String {
     const urls = ["a", "b"]
     const pending = download task[urls]
     pending.all(1)
@@ -316,8 +316,8 @@ async func load(): String {
                 """
 @multidef
 class NetworkIssue {}
-async func download(url: String): String, !NetworkIssue => url
-async func load(): String[] {
+async download(url: String): String, !NetworkIssue => url
+async load(): String[] {
     const urls = ["a", "b"]
     const pending: TaskCollection<String> = download task[urls]
     return await pending.all()
@@ -336,8 +336,8 @@ async func load(): String[] {
                 """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue => "ok"
-async func load(): String {
+async fetch(): String, !NetworkIssue => "ok"
+async load(): String {
     const pending: Task<String> = fetch()
     return await pending
 }
@@ -353,7 +353,7 @@ async func load(): String {
         result = check_types(
             parse(
                 """
-func download(url: String): String => url
+download(url: String): String => url
 const urls = ["a", "b"]
 const pending = download task[urls]
 """
@@ -367,8 +367,8 @@ const pending = download task[urls]
     def test_await_unwraps_task_inside_async_function(self) -> None:
         program = parse(
             """
-async func fetch(): String => "ok"
-async func load(): String {
+async fetch(): String => "ok"
+async load(): String {
     const value = await fetch()
     return value
 }
@@ -387,8 +387,8 @@ async func load(): String {
     def test_task_await_method_unwraps_task_in_sync_function(self) -> None:
         program = parse(
             """
-async func fetch(): String => "ok"
-func load(): String {
+async fetch(): String => "ok"
+load(): String {
     return fetch().await()
 }
 """
@@ -404,8 +404,8 @@ func load(): String {
         result = check_types(
             parse(
                 """
-async func fetch(): String => "ok"
-async func load(): String {
+async fetch(): String => "ok"
+async load(): String {
     return fetch().await()
 }
 """
@@ -422,7 +422,7 @@ async func load(): String {
     def test_reports_await_of_non_task_expression(self) -> None:
         program = parse(
             """
-async func load(): String {
+async load(): String {
     const value = await "ready"
     return value
 }
@@ -439,8 +439,8 @@ async func load(): String {
             """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue => "ok"
-func main(): Void {
+async fetch(): String, !NetworkIssue => "ok"
+main(): Void {
     const pending = fetch()
 }
 """
@@ -460,8 +460,8 @@ func main(): Void {
             """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue => "ok"
-async func load(): String {
+async fetch(): String, !NetworkIssue => "ok"
+async load(): String {
     return await fetch()
 }
 """
@@ -477,8 +477,8 @@ async func load(): String {
             """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue => "ok"
-async func load(): String {
+async fetch(): String, !NetworkIssue => "ok"
+async load(): String {
     return catch await fetch() {
         issue: NetworkIssue => "guest"
     }
@@ -495,8 +495,8 @@ async func load(): String {
             """
 @multidef
 class NetworkIssue {}
-async func fetch(): String, !NetworkIssue => "ok"
-async func load(): String, !NetworkIssue {
+async fetch(): String, !NetworkIssue => "ok"
+async load(): String, !NetworkIssue {
     return forward await fetch()
 }
 """
@@ -518,8 +518,8 @@ async func load(): String, !NetworkIssue {
     def test_records_dynamic_and_fixed_array_types(self) -> None:
         program = parse(
             """
-let dynamic: Int[]
-let fixed: Int[2 + 3]
+var dynamic: Int[]
+var fixed: Int[2 + 3]
 """
         )
 
@@ -587,7 +587,7 @@ struct FeedMultiResponse {
     const okCount: Int
 }
 
-func empty(): FeedMultiResponse {
+empty(): FeedMultiResponse {
     return {
         count: 0,
         okCount: 0
@@ -610,7 +610,7 @@ struct FeedMultiResponse {
     const okCount: Int
 }
 
-func empty(): FeedMultiResponse => {
+empty(): FeedMultiResponse => {
     count: 0,
     okCount: 0
 }
@@ -636,11 +636,11 @@ struct FeedResponse {
     const status: Int
 }
 
-func fromDriverResult(result: DriverFetchResult): FeedResponse => {
+fromDriverResult(result: DriverFetchResult): FeedResponse => {
     status: result.statusCode
 }
 
-func get(): FeedResponse {
+get(): FeedResponse {
     return fromDriverResult({
         network: "http",
         statusCode: 200
@@ -665,10 +665,10 @@ struct DriverFetchResult {
     public statusCode: Int
 }
 
-func accept(result: DriverFetchResult): DriverFetchResult => result
+accept(result: DriverFetchResult): DriverFetchResult => result
 
-func get(): DriverFetchResult {
-    let result: DriverFetchResult = {
+get(): DriverFetchResult {
+    var result: DriverFetchResult = {
         network: "http",
         statusCode: 0
     }
@@ -724,7 +724,7 @@ func get(): DriverFetchResult {
         self.assertEqual(result.diagnostics[0].message, "Type Int[2] has no member 'len'")
 
     def test_reports_non_constant_fixed_array_size(self) -> None:
-        program = parse("let values: Int[count]")
+        program = parse("var values: Int[count]")
 
         result = check_types(program, raise_on_error=False)
 
@@ -734,7 +734,7 @@ func get(): DriverFetchResult {
         )
 
     def test_reports_negative_fixed_array_size(self) -> None:
-        program = parse("let values: Int[-1]")
+        program = parse("var values: Int[-1]")
 
         result = check_types(program, raise_on_error=False)
 
@@ -758,7 +758,7 @@ const valid = sum > 0
     def test_primitive_to_string_returns_string(self) -> None:
         program = parse(
             """
-func stringify(value: Int, enabled: Bool, label: String): String {
+stringify(value: Int, enabled: Bool, label: String): String {
     return value.toString() + enabled.toString() + label.toString()
 }
 """
@@ -774,7 +774,7 @@ func stringify(value: Int, enabled: Bool, label: String): String {
             """
 class User {
     public name: String
-    func rename(name: String): Void {
+    rename(name: String): Void {
         this.name = name
     }
 }
@@ -795,7 +795,7 @@ class User {
         program = parse(
             """
 class Node {
-    func same(other: self): self {
+    same(other: self): self {
         return other
     }
 }
@@ -818,7 +818,7 @@ class Node {
 class User {
     implements Stringable
 
-    public func toString(): String {
+    public toString(): String {
         return "User"
     }
 }
@@ -845,13 +845,13 @@ class User {
             """
 @multidef
 interface Printable {
-    public func print(): Void
+    public print(): Void
 }
 
 class User {
     implements Printable
 
-    public func print(): Void {}
+    public print(): Void {}
 }
 """
         )
@@ -865,13 +865,13 @@ class User {
             """
 @multidef
 interface Runnable {
-    public func run(): Void
+    public run(): Void
 }
 
 trait AppLogic {
     implements Runnable
 
-    public func run(): Void {}
+    public run(): Void {}
 }
 
 class App {
@@ -890,7 +890,7 @@ class App {
             """
 @multidef
 interface Runnable {
-    public async func run(): Int
+    public async run(): Int
 }
 
 class App {
@@ -898,7 +898,7 @@ class App {
 
     public new() {}
 
-    public async func run(): Int => 1
+    public async run(): Int => 1
 }
 
 const runnable: Runnable = App.new()
@@ -914,19 +914,19 @@ const runnable: Runnable = App.new()
             """
 @multidef
 interface Runnable {
-    public func run(): Int
+    public run(): Int
 }
 
 class One {
     implements Runnable
     public new() {}
-    public func run(): Int => 1
+    public run(): Int => 1
 }
 
 class Two {
     implements Runnable
     public new() {}
-    public func run(): Int => 2
+    public run(): Int => 2
 }
 
 const values: Runnable[] = [One.new(), Two.new()]
@@ -1009,7 +1009,7 @@ const defs: Defs = {
                 """
 @multidef
 interface Runnable {
-    public func run(): Void
+    public run(): Void
 }
 
 class App {
@@ -1034,7 +1034,7 @@ class App {
         )
 
     def test_reports_return_type_mismatch(self) -> None:
-        program = parse("func answer(): Int { return \"nope\" }")
+        program = parse("answer(): Int { return \"nope\" }")
 
         with self.assertRaises(TypeCheckError) as raised:
             check_types(program)
@@ -1047,7 +1047,7 @@ class App {
     def test_reports_call_argument_errors(self) -> None:
         program = parse(
             """
-func takesInt(value: Int): Void {}
+takesInt(value: Int): Void {}
 takesInt("nope")
 """
         )
@@ -1057,7 +1057,7 @@ takesInt("nope")
         self.assertEqual(result.diagnostics[0].message, "Cannot assign String to Int")
 
     def test_reports_called_function_name_on_arity_mismatch(self) -> None:
-        program = parse("func takesInt(value: Int): Void {}\ntakesInt()")
+        program = parse("takesInt(value: Int): Void {}\ntakesInt()")
 
         result = check_types(program, raise_on_error=False)
 
@@ -1078,7 +1078,7 @@ takesInt("nope")
 
     def test_rejects_instance_member_access_through_class(self) -> None:
         result = check_types(
-            parse("class User { func name(): String => \"\" }\nconst name = User.name()"),
+            parse("class User { name(): String => \"\" }\nconst name = User.name()"),
             raise_on_error=False,
         )
 
@@ -1092,9 +1092,9 @@ takesInt("nope")
             parse(
                 """
 class User {
-    static func name(): String => ""
+    static name(): String => ""
 }
-func main(user: User): String {
+main(user: User): String {
     return user.name()
 }
 """
@@ -1111,9 +1111,9 @@ func main(user: User): String {
         program = parse(
             """
 class Profile {}
-func consume(take profile: Profile): Void {}
-func main(): Void {
-    let profile: Profile
+consume(take profile: Profile): Void {}
+main(): Void {
+    var profile: Profile
     consume(profile)
 }
 """
@@ -1130,9 +1130,9 @@ func main(): Void {
         program = parse(
             """
 class Profile {}
-func inspect(profile: Profile): Void {}
-func main(): Void {
-    let profile: Profile
+inspect(profile: Profile): Void {}
+main(): Void {
+    var profile: Profile
     inspect(move profile)
 }
 """
@@ -1172,8 +1172,8 @@ value = 2
     def test_lazy_parameter_requires_lazy_variable_argument(self) -> None:
         program = parse(
             """
-func consume(lazy value: Int): Int => value
-func main(): Int {
+consume(lazy value: Int): Int => value
+main(): Int {
     const eager = 1
     return consume(eager)
 }
@@ -1190,8 +1190,8 @@ func main(): Int {
     def test_lazy_parameter_accepts_lazy_variable_argument(self) -> None:
         program = parse(
             """
-func consume(lazy value: Int): Int => value
-func main(): Int {
+consume(lazy value: Int): Int => value
+main(): Int {
     lazy delayed = 1
     return consume(delayed)
 }
@@ -1233,7 +1233,7 @@ const user: User? = null
 class Profile {}
 class User {
     public profile: Profile?
-    public func setProfile(take profile: Profile): Void {
+    public setProfile(take profile: Profile): Void {
         this.profile = profile
     }
 }
@@ -1249,7 +1249,7 @@ class User {
             """
 class User {
     public profile: String?
-    public func name(): String {
+    public name(): String {
         return this.profile ? "set" : ""
     }
 }
@@ -1269,7 +1269,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String {
+    public name(): String {
         return this.profile ? this.profile.firstName : ""
     }
 }
@@ -1289,10 +1289,10 @@ struct Profile {
 }
 class User {
     public profile: Profile?
-    public func render(profile: Profile): String {
+    public render(profile: Profile): String {
         return profile.firstName
     }
-    public func name(): String {
+    public name(): String {
         return this.profile ? this.render(this.profile) : ""
     }
 }
@@ -1312,7 +1312,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String {
+    public name(): String {
         return this.profile != null ? this.profile.firstName : ""
     }
 }
@@ -1332,7 +1332,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String? {
+    public name(): String? {
         return this.profile?.firstName
     }
 }
@@ -1354,7 +1354,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(): String {
+    public name(): String {
         return this.profile.firstName
     }
 }
@@ -1377,7 +1377,7 @@ class Profile {
 }
 class User {
     public profile: Profile?
-    public func name(flag: Bool): String {
+    public name(flag: Bool): String {
         if this.profile {
             print this.profile.firstName
         }
@@ -1418,7 +1418,7 @@ const user: User = User.new()
 @multidef
 class ParseIssue {}
 class AllocFailed {}
-func parse(): Int, !ParseIssue, ?AllocFailed {
+parse(): Int, !ParseIssue, ?AllocFailed {
     return 1
 }
 """
@@ -1442,11 +1442,11 @@ func parse(): Int, !ParseIssue, ?AllocFailed {
 @multidef
 class ParseIssue {}
 class Parser {
-    static func parse(): Int, !ParseIssue {
+    static parse(): Int, !ParseIssue {
         return 1
     }
 }
-func main(): Void {
+main(): Void {
     const value = Parser.parse()
 }
 """
@@ -1464,9 +1464,9 @@ func main(): Void {
 @multidef
 class AllocFailed {}
 class Array {
-    static func reserve(size: Int): Void, ?AllocFailed {}
+    static reserve(size: Int): Void, ?AllocFailed {}
 }
-func main(): Void {
+main(): Void {
     Array.reserve(1000)
 }
 """
@@ -1483,11 +1483,11 @@ func main(): Void {
 @multidef
 class ParseIssue {}
 class Parser {
-    static func parse(): Int, !ParseIssue {
+    static parse(): Int, !ParseIssue {
         return 1
     }
 }
-func main(): Void {
+main(): Void {
     const value = catch Parser.parse() {
         issue: ParseIssue => 0
     }
@@ -1508,7 +1508,7 @@ class ParseIssue {
     public new() {}
 }
 class Parser {
-    static func parse(): Int, !ParseIssue {
+    static parse(): Int, !ParseIssue {
         return ParseIssue.new()
     }
 }
@@ -1526,11 +1526,11 @@ class Parser {
 @multidef
 class ParseIssue {}
 class Parser {
-    static func parse(): Int, !ParseIssue {
+    static parse(): Int, !ParseIssue {
         return 1
     }
 }
-func main(): Void {
+main(): Void {
     const value = catch Parser.parse() {
         issue: ParseIssue => "nope"
     }
@@ -1550,9 +1550,9 @@ func main(): Void {
 @multidef
 class AllocFailed {}
 class Array {
-    static func reserve(size: Int): Void, ?AllocFailed {}
+    static reserve(size: Int): Void, ?AllocFailed {}
 }
-func prepare(): Void, ?AllocFailed {
+prepare(): Void, ?AllocFailed {
     forward Array.reserve(1000)
 }
 """
@@ -1569,9 +1569,9 @@ func prepare(): Void, ?AllocFailed {
 @multidef
 class AllocFailed {}
 class Array {
-    static func reserve(size: Int): Void, ?AllocFailed {}
+    static reserve(size: Int): Void, ?AllocFailed {}
 }
-func load(): Void, !AllocFailed {
+load(): Void, !AllocFailed {
     forward Array.reserve(1000)
 }
 """
@@ -1588,9 +1588,9 @@ func load(): Void, !AllocFailed {
 @multidef
 class AllocFailed {}
 class Array {
-    static func reserve(size: Int): Void, ?AllocFailed {}
+    static reserve(size: Int): Void, ?AllocFailed {}
 }
-func load(): Void {
+load(): Void {
     forward Array.reserve(1000)
 }
 """
@@ -1608,11 +1608,11 @@ func load(): Void {
 @multidef
 class ParseIssue {}
 class Parser {
-    static func parse(): Int, !ParseIssue {
+    static parse(): Int, !ParseIssue {
         return 1
     }
 }
-func parseMaybe(): Int, ?ParseIssue {
+parseMaybe(): Int, ?ParseIssue {
     return forward Parser.parse()
 }
 """
@@ -1633,7 +1633,7 @@ public struct HttpResponse {
     public body: String
 }
 
-let response: HttpResponse = {
+var response: HttpResponse = {
     status: 200,
     body: "OK"
 }
@@ -1657,7 +1657,7 @@ public struct HttpResponse {
     public body: String
 }
 
-let response: HttpResponse = {
+var response: HttpResponse = {
     status: "bad",
     body: "OK"
 }
@@ -1680,7 +1680,7 @@ public enum HttpStatus : struct {
     Ok => { 200, "OK", false }
     NotFound => { 404, "Not Found", true }
 
-    public func isClientError(): Bool => this.code >= 400 && this.code < 500
+    public isClientError(): Bool => this.code >= 400 && this.code < 500
 }
 """,
             source_name="HttpStatus.forge",
@@ -1758,10 +1758,10 @@ struct Box {
     public value: Int?
 }
 
-func consume(value: Int?): Void {}
+consume(value: Int?): Void {}
 
-func main(): Void {
-    let assigned: Int? = null
+main(): Void {
+    var assigned: Int? = null
     assigned = while false { break 1 }
     consume(while false { break 2 })
     const box: Box = { value: while false { break 3 } }
@@ -1829,7 +1829,7 @@ const splitLimit = "x".split(",", "2")
     def test_array_destructuring_infers_element_type_for_each_binding(self) -> None:
         program = parse(
             """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first, second] = catch values {
         issue: PatternMismatch => { return }
     }
@@ -1847,7 +1847,7 @@ func main(values: Int[]): Void {
         result = check_types(
             parse(
                 """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const [first] = values
 }
 """
@@ -1865,7 +1865,7 @@ func main(values: Int[]): Void {
         result = check_types(
             parse(
                 """
-func main(values: Int[2]): Void {
+main(values: Int[2]): Void {
     const [first, second] = values
     const [one, two] = [1, 2]
 }
@@ -1879,7 +1879,7 @@ func main(values: Int[2]): Void {
         result = check_types(
             parse(
                 """
-func main(values: Int[1]): Void {
+main(values: Int[1]): Void {
     const [first, second] = values
 }
 """
@@ -1895,7 +1895,7 @@ func main(values: Int[1]): Void {
         caught = check_types(
             parse(
                 """
-func main(values: Int[1]): Void {
+main(values: Int[1]): Void {
     const [first, second] = catch values {
         issue: PatternMismatch => { return }
     }
@@ -1913,7 +1913,7 @@ func main(values: Int[1]): Void {
         result = check_types(
             parse(
                 """
-func main(values: Int[2]): Void {
+main(values: Int[2]): Void {
     const [first, second] = catch values {
         issue: PatternMismatch => { return }
     }
@@ -1928,7 +1928,7 @@ func main(values: Int[2]): Void {
         result = check_types(
             parse(
                 """
-func main(values: Int[]): Void {
+main(values: Int[]): Void {
     const same = catch values {
         issue: PatternMismatch => values
     }
@@ -1945,7 +1945,7 @@ func main(values: Int[]): Void {
 
     def test_array_destructuring_rejects_non_array_source(self) -> None:
         result = check_types(
-            parse("func main(): Void { const [value] = 42 }"),
+            parse("main(): Void { const [value] = 42 }"),
             raise_on_error=False,
         )
 

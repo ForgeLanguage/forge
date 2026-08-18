@@ -178,6 +178,8 @@ class Parser:
             if ownership is not None:
                 raise ParserError("Enum declaration cannot have ownership modifier", self._previous().location)
             return self._enum_declaration(modifiers)
+        if self._check(TokenKind.FUNC):
+            raise ParserError("'func' is not allowed in function declarations", self._peek().location)
         if self._is_switch_function_declaration():
             self._advance()
             return self._switch_function_declaration(
@@ -185,7 +187,7 @@ class Parser:
                 self._previous(),
                 ownership or "take",
             )
-        if self._match(TokenKind.FUNC, TokenKind.GENERATOR):
+        if self._match(TokenKind.GENERATOR):
             return self._function_declaration(
                 modifiers,
                 self._previous(),
@@ -197,7 +199,13 @@ class Parser:
                 self._previous(),
                 ownership or "take",
             )
-        if self._match(TokenKind.CONST, TokenKind.LET, TokenKind.LAZY):
+        if self._is_function_declaration():
+            return self._function_declaration(
+                modifiers,
+                self._advance(),
+                ownership or "take",
+            )
+        if self._match(TokenKind.CONST, TokenKind.VAR, TokenKind.LAZY):
             if ownership is not None:
                 raise ParserError(
                     "Local declaration cannot have ownership modifier",
@@ -264,11 +272,16 @@ class Parser:
         members: list[Declaration | Statement] = []
         while not self._check(TokenKind.RIGHT_BRACE) and not self._check(TokenKind.EOF):
             item_modifiers = self._modifiers()
-            if self._match(TokenKind.FUNC, TokenKind.GENERATOR):
+            if self._check(TokenKind.FUNC):
+                raise ParserError("'func' is not allowed in function declarations", self._peek().location)
+            if self._match(TokenKind.GENERATOR):
                 members.append(self._function_declaration(item_modifiers, self._previous()))
                 continue
             if self._match(TokenKind.NEW):
                 members.append(self._function_declaration(item_modifiers, self._previous()))
+                continue
+            if self._is_function_declaration():
+                members.append(self._function_declaration(item_modifiers, self._advance()))
                 continue
             if item_modifiers:
                 token = self._peek()
@@ -400,13 +413,55 @@ class Parser:
             and self.tokens[self._current + 2].kind is TokenKind.LEFT_PAREN
         )
 
+    def _is_function_declaration(self) -> bool:
+        if self._peek().kind not in {TokenKind.IDENTIFIER, TokenKind.PRINT}:
+            return False
+
+        current = self._current + 1
+        if current < len(self.tokens) and self.tokens[current].kind is TokenKind.LESS:
+            depth = 1
+            current += 1
+            while current < len(self.tokens) and depth > 0:
+                if self.tokens[current].kind is TokenKind.LESS:
+                    depth += 1
+                elif self.tokens[current].kind is TokenKind.GREATER:
+                    depth -= 1
+                current += 1
+
+        if current >= len(self.tokens) or self.tokens[current].kind is not TokenKind.LEFT_PAREN:
+            return False
+
+        depth = 1
+        current += 1
+        while current < len(self.tokens) and depth > 0:
+            if self.tokens[current].kind is TokenKind.LEFT_PAREN:
+                depth += 1
+            elif self.tokens[current].kind is TokenKind.RIGHT_PAREN:
+                depth -= 1
+            current += 1
+
+        if current >= len(self.tokens):
+            return False
+
+        return self.tokens[current].kind in {
+            TokenKind.COLON,
+            TokenKind.FAT_ARROW,
+            TokenKind.LEFT_BRACE,
+            TokenKind.EQUAL,
+            TokenKind.SEMICOLON,
+        }
+
     def _function_declaration(
         self,
         modifiers: tuple[str, ...],
         keyword: Token,
         return_ownership: str = "take",
     ) -> FunctionDeclaration:
-        if keyword.kind is TokenKind.NEW:
+        declaration_kind = keyword.lexeme
+        if keyword.kind in {TokenKind.IDENTIFIER, TokenKind.PRINT}:
+            name = keyword.lexeme
+            declaration_kind = "func"
+        elif keyword.kind is TokenKind.NEW:
             name = keyword.lexeme
         else:
             name = self._consume_function_name("Expected function name").lexeme
@@ -444,7 +499,7 @@ class Parser:
             outcomes,
             body,
             modifiers,
-            keyword.lexeme,
+            declaration_kind,
             native_name if isinstance(native_name, str) else None,
             type_parameters,
             return_ownership,
@@ -645,7 +700,7 @@ class Parser:
             keyword.location,
             name.lexeme,
             initializer,
-            keyword.kind is TokenKind.LET,
+            keyword.kind is TokenKind.VAR,
             declared_type,
             modifiers,
             None,
@@ -671,7 +726,7 @@ class Parser:
                     name.location,
                     name.lexeme,
                     None,
-                    keyword.kind is TokenKind.LET,
+                    keyword.kind is TokenKind.VAR,
                 )
             )
             if not self._match(TokenKind.COMMA):

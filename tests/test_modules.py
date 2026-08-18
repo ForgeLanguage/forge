@@ -85,7 +85,7 @@ http = "1.2.0"
             )
             (root / "forge.lock").write_text('http = "1.2.0"\n')
             (root / "src" / "main.forge").write_text(
-                "use http.client.Request\nfunc main(): Void {}"
+                "use http.client.Request\nmain(): Void {}"
             )
             (root / "packages" / "http" / "forge.toml").write_text(
                 """
@@ -137,7 +137,7 @@ use std.Net.TcpStream
 use std.Http.Http
 use std.Json.Json
 
-func main(): Bool {
+main(): Bool {
     return true
 }
 """
@@ -176,7 +176,7 @@ nativepkg = "1.0.0"
 """
             )
             (root / "forge.lock").write_text('nativepkg = "1.0.0"\n')
-            (root / "src" / "main.forge").write_text("func main(): Void {}")
+            (root / "src" / "main.forge").write_text("main(): Void {}")
             (root / "packages" / "nativepkg" / "forge.toml").write_text(
                 """
 [package]
@@ -210,7 +210,7 @@ http = "1.2.0"
 """
             )
             (root / "forge.lock").write_text('http = "2.0.0"\n')
-            (root / "src" / "main.forge").write_text("func main(): Void {}")
+            (root / "src" / "main.forge").write_text("main(): Void {}")
             (root / "packages" / "http" / "forge.toml").write_text(
                 """
 [package]

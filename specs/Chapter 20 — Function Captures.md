@@ -63,7 +63,7 @@ fn(move file)
 Нельзя вернуть closure, если она захватывает borrow из текущей области:
 
 ```forge
-public func makePrinter(): func(): Void {
+public makePrinter(): func(): Void {
     const message: String = "Hello"
 
     return () => print message // ❌
@@ -77,7 +77,7 @@ public func makePrinter(): func(): Void {
 Если значение безопасно (value-like):
 
 ```forge
-public func makePrinter(message: String): func(): Void {
+public makePrinter(message: String): func(): Void {
     return () => print message // ✅
 }
 ```
